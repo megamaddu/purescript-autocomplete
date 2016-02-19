@@ -1,6 +1,10 @@
 {
   "name": "purescript-autocomplete",
   "version": "1.0.0",
+  "repository": {                                                          
+    "type": "git",                                                         
+    "url": "git://github.com/jane/purescript-autocomplete.git"            
+  },
   "moduleType": [
     "node"
   ],
