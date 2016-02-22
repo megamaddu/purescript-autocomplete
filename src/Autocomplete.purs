@@ -13,13 +13,13 @@ import Control.Monad.Aff (Aff, launchAff, attempt, liftEff')
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Exception (EXCEPTION, Error, message)
 import Data.Argonaut.Decode (decodeJson)
-import Data.Either (Either, either)
+import Data.Either (Either(Left, Right), either)
 import Data.Either.Unsafe (fromRight)
 import Data.Map (insert)
 import Data.Monoid (mempty)
 import Data.Tuple (Tuple(Tuple))
 import Network.HTTP.Affjax (AJAX)
-import Prelude (Unit, ($), (<$>), (==), (||), bind, pure, unit, id)
+import Prelude (Unit, ($), (<$>), (==), (||), (<<<), bind, pure, unit, id)
 import Signal ((~>), (<~), runSignal, dropRepeats, unwrap, foldp, merge)
 import Signal.Channel (CHANNEL, Channel, send, subscribe, channel)
 import Util.Signal (debounce)
@@ -103,11 +103,17 @@ runSearch api chan st@(SuggesterState store) = do
   if terms == mempty || hasSuggestionResults st
      then pure unit
      else launchAff do
-       res <- handleSearchErrors <$> search api terms
+       res <- handleSearchError <$> search api terms
        liftEff' $ send chan $ Tuple terms res
   where
-    handleSearchErrors :: Either Error Suggestions -> Suggestions
-    handleSearchErrors = either (\e -> Failed (message e) []) id
+    unwrapMessage :: forall a. Either Error a -> Either String a
+    unwrapMessage = either (Left <<< message) Right
+
+    handleError :: Either String Suggestions -> Suggestions
+    handleError = either (\e -> Failed e []) id
+
+    handleSearchError :: Either Error Suggestions -> Suggestions
+    handleSearchError = handleError <<< unwrapMessage
 
     search :: forall e'.
               SuggestionApi
@@ -115,4 +121,4 @@ runSearch api chan st@(SuggesterState store) = do
            -> Aff ( ajax :: AJAX | e' ) (Either Error Suggestions)
     search api terms = attempt do
       res <- api.getSuggestions terms
-      pure $ fromRight $ decodeJson res.response
+      pure $ handleError $ decodeJson res.response
