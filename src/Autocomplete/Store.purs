@@ -1,6 +1,7 @@
 module Autocomplete.Store where
 
 import Autocomplete.Types (Suggestion, Suggestions(..), SuggestionResults, Terms)
+import Data.Array (length)
 import Data.Map (Map, lookup, insert)
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Tuple (Tuple(Tuple))
@@ -38,7 +39,11 @@ updateSuggestions action (SuggesterState state) =
       , store
       , currentResults: case lookup currentTerms store of
                           Nothing -> Loading (runSuggestions previousResults)
-                          Just results -> results }
+                          Just results ->
+                            case length (runSuggestions results) of
+                              0 -> Ready (runSuggestions previousResults)
+                              _ -> results
+      }
     runSuggestions :: Suggestions -> Array Suggestion
     runSuggestions (Loading a)  = a
     runSuggestions (Failed _ a) = a

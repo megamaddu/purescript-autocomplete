@@ -59,8 +59,9 @@ main = runTest do
           , Loading []
           , Ready expectedMatches
           , Loading expectedMatches
-          , Ready []
-          , Ready expectedMatches ]
+          , Ready expectedMatches
+          -- , Ready expectedMatches -- this gets skipped because the output doesn't change
+          ]
           results
 
   test "Util.Signal.whenEqual" do

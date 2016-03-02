@@ -24,7 +24,9 @@
     "purescript-monoid": "^0.3.2",
     "purescript-tuples": "^0.4.0",
     "purescript-affjax": "^0.10.4",
-    "purescript-signal": "^5.0.0"
+    "purescript-signal": "^5.0.0",
+    "purescript-nonempty": "^0.2.0",
+    "purescript-arrays": "^0.4.5"
   },
   "resolutions": {
     "purescript-aff": "^0.14.0"
