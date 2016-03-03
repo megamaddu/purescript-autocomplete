@@ -1,0 +1,29 @@
+{
+  "name": "purescript-autocomplete",
+  "version": "1.0.0",
+  "description": "Module documentation on Pursuit: [purescript-autocomplete](https://pursuit.purescript.org/packages/purescript-autocomplete)",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "postinstall": "bower install",
+    "test": "pulp test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jane/purescript-autocomplete.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jane/purescript-autocomplete/issues"
+  },
+  "homepage": "https://github.com/jane/purescript-autocomplete#readme",
+  "devDependencies": {
+    "bower": "^1.7.7",
+    "pulp": "^8.1.0",
+    "purescript": "^0.8.2"
+  }
+}
