@@ -117,7 +117,8 @@ fakeSuggestionApi latency = { getSuggestions }
                          , { phrase: "chevron infinity scarves", weight: 1 } ]
             _ -> []
 
-fromArr :: forall e a. Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
+fromArr :: forall e a. Array a -> Aff ( channel :: C.CHANNEL
+                                      | e ) (C.Channel a)
 fromArr arr = do
   chan <- liftEff $ C.channel (head arr)
   forkAff $ later $ liftEff $ foreachE (tail arr) \a -> do
