@@ -4,7 +4,7 @@ import Data.Argonaut.Combinators ((.?))
 import Data.Argonaut.Decode (class DecodeJson, decodeJson)
 import Data.Monoid (class Monoid)
 import Data.Tuple (Tuple)
-import Prelude (class Semigroup, class Show, class Eq, pure, ($), bind, show, (<>), (==), (&&))
+import Prelude
 
 -- | Any string.  Terms are normalized for searching. Ex:
 -- |
@@ -14,7 +14,7 @@ type Terms = String
 -- | A single suggestion row.  Phrase is the text which matched the search.
 -- | Hits represents relevancy (descending).
 newtype Suggestion = Suggestion { phrase :: String
-                                , hits :: Int }
+                                , hits :: Number }
 
 -- | Suggestions are represented as a state and a collection of the
 -- | currently most relevant suggestions.  Ex:

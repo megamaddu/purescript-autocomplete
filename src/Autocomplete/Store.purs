@@ -5,7 +5,7 @@ import Data.Array (length)
 import Data.Map (Map, lookup, insert)
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Tuple (Tuple(Tuple))
-import Prelude (class Eq, (==), (&&))
+import Prelude
 
 -- | Stores searched terms so they can be recalled without re-querying.
 -- | Also stores the current search terms.
@@ -41,13 +41,18 @@ updateSuggestions action (SuggesterState state) =
                           Nothing -> Loading (runSuggestions previousResults)
                           Just results ->
                             case length (runSuggestions results) of
-                              0 -> Ready (runSuggestions previousResults)
+                              0 -> results `substitute` (runSuggestions previousResults)
                               _ -> results
       }
     runSuggestions :: Suggestions -> Array Suggestion
     runSuggestions (Loading a)  = a
     runSuggestions (Failed _ a) = a
     runSuggestions (Ready a)    = a
+
+    substitute :: Suggestions -> Array Suggestion -> Suggestions
+    substitute (Loading _)  r = Loading r
+    substitute (Failed e _) r = Failed e r
+    substitute (Ready _)    r = Ready r
 
 -- | Returns whether the store contains any form of results for the
 -- | current terms.  Loading and failed search results are included.

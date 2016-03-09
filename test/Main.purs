@@ -1,32 +1,24 @@
 module Test.Main where
 
-import Autocomplete
-import Autocomplete.Api
-import Autocomplete.Store
-import Autocomplete.Types
-import Control.Monad.Aff (Aff, makeAff, forkAff, later, later')
-import Control.Monad.Aff.Console (log)
+import Autocomplete (mkSuggester')
+import Autocomplete.Types (Suggestion(Suggestion), Suggestions(Ready, Loading, Failed))
+import Control.Monad.Aff (Aff, forkAff, later, later')
 import Control.Monad.Eff (foreachE)
 import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Exception (error)
-import Control.Monad.Eff.Ref (REF, newRef, readRef, writeRef)
+import Control.Monad.Eff.Ref (readRef, writeRef, newRef)
 import Data.Argonaut.Core (Json)
 import Data.Array (snoc)
 import Data.Array.Unsafe (head, tail)
-import Data.Function (Fn4, runFn4)
-import Data.List (List(..), toList, fromList)
-import Data.Monoid (class Monoid, mempty)
 import Network.HTTP.StatusCode (StatusCode(StatusCode))
-import Prelude (class Show, class Eq, Unit, ($), (==), (<<<), bind, id, pure, unit, const, show, (++), (/=))
-import Signal (Signal, constant, (~>), runSignal)
+import Prelude
 import Signal.Channel as C
 import Signal.Time (since)
-import Test.Signal (expect, expectFn)
-import Test.Unit (Assertion, Test, test, timeout, runTest)
+import Test.Signal (expect)
+import Test.Unit (test, runTest)
 import Test.Util (wait)
 import Test.Unit.Assert (equal)
 import Unsafe.Coerce (unsafeCoerce)
-import Util.Signal
+import Util.Signal (debounce, whenChangeTo, whenEqual)
 
 main = runTest do
   test "Autocomplete Send/Subscribe Integration Test" do
@@ -49,18 +41,22 @@ main = runTest do
     wait 200
     send "chevron"
     wait 200
+    send "foo"
+    wait 200
 
     results <- liftEff $ readRef resultsRef
 
-    let expectedMatches = [ Suggestion { phrase: "chevron infinity", hits: 1 }
-                          , Suggestion { phrase: "chevron print", hits: 1 }
-                          , Suggestion { phrase: "chevron infinity scarves", hits: 1 } ]
+    let expectedMatches = [ Suggestion { phrase: "chevron infinity", hits: 1.1 }
+                          , Suggestion { phrase: "chevron print", hits: 1.0 }
+                          , Suggestion { phrase: "chevron infinity scarves", hits: 0.9 } ]
     equal [ Ready []
           , Loading []
           , Ready expectedMatches
           , Loading expectedMatches
           , Ready expectedMatches
           -- , Ready expectedMatches -- this gets skipped because the output doesn't change
+          , Loading expectedMatches
+          , Failed "Couldn't decode Array" expectedMatches
           ]
           results
 
@@ -110,12 +106,17 @@ fakeSuggestionApi latency = { getSuggestions }
            , response: mockResults }
       where
         mockResults :: Json
-        mockResults = unsafeCoerce
+        mockResults =
           case t of
-            "chevron" -> [ { phrase: "chevron infinity", weight: 1 }
-                         , { phrase: "chevron print", weight: 1 }
-                         , { phrase: "chevron infinity scarves", weight: 1 } ]
-            _ -> []
+            "chevron" -> unsafeCoerce [ { phrase: "chevron infinity", weight: 1.1 }
+                                      , { phrase: "chevron print", weight: 1.0 }
+                                      , { phrase: "chevron infinity scarves", weight: 0.9 }
+                                      ]
+            "foo" -> unsafeCoerce [ { pphrase: "chevron infinity", weight: 1 }
+                                  , { pphrase: "chevron print", weight: 1 }
+                                  , { pphrase: "chevron infinity scarves", weight: 0 }
+                                  ]
+            _ -> unsafeCoerce []
 
 fromArr :: forall e a. Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
 fromArr arr = do

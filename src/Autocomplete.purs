@@ -9,16 +9,16 @@ module Autocomplete
 import Autocomplete.Api (SuggestionApi, mkDefaultApi)
 import Autocomplete.Store (SuggesterState(SuggesterState), SuggesterAction(SetTerms, AddResults), hasSuggestionResults, getSuggestionResults, updateSuggestions)
 import Autocomplete.Types (Terms, SuggestionResults, Suggestions(Failed))
-import Control.Monad.Aff (Aff, launchAff, attempt, liftEff')
+import Control.Monad.Aff (runAff)
 import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Exception (EXCEPTION, Error, message)
+import Control.Monad.Eff.Exception (EXCEPTION, message)
 import Data.Argonaut.Decode (decodeJson)
-import Data.Either (Either(Left, Right), either)
+import Data.Either (either)
 import Data.Map (insert)
 import Data.Monoid (mempty)
 import Data.Tuple (Tuple(Tuple))
 import Network.HTTP.Affjax (AJAX)
-import Prelude (Unit, ($), (<$>), (==), (||), (<<<), bind, pure, unit, id)
+import Prelude
 import Signal ((~>), (<~), runSignal, dropRepeats, unwrap, foldp, merge)
 import Signal.Channel (CHANNEL, Channel, send, subscribe, channel)
 import Util.Signal (debounce)
@@ -98,26 +98,18 @@ runSearch :: forall e.
                  | e
                  ) Unit
 runSearch api chan st@(SuggesterState store) = do
-  let terms = store.currentTerms
   if terms == mempty || hasSuggestionResults st
-     then pure unit
-     else launchAff do
-       res <- handleSearchError <$> search api terms
-       liftEff' $ send chan $ Tuple terms res
+    then pure unit
+    else runAff handleAjaxError handleParseResults search
   where
-    unwrapMessage :: forall a. Either Error a -> Either String a
-    unwrapMessage = either (Left <<< message) Right
+    terms = store.currentTerms
 
-    handleError :: Either String Suggestions -> Suggestions
-    handleError = either (\e -> Failed e []) id
+    handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []
 
-    handleSearchError :: Either Error Suggestions -> Suggestions
-    handleSearchError = handleError <<< unwrapMessage
+    handleParseResults e = do
+      let results = either (\msg -> Failed msg []) id e
+      send chan $ Tuple terms results
 
-    search :: forall e'.
-              SuggestionApi
-           -> Terms
-           -> Aff ( ajax :: AJAX | e' ) (Either Error Suggestions)
-    search api terms = attempt do
+    search = do
       res <- api.getSuggestions terms
-      pure $ handleError $ decodeJson res.response
+      pure $ decodeJson res.response
