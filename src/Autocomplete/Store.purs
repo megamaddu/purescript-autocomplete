@@ -1,17 +1,20 @@
 module Autocomplete.Store where
 
-import Autocomplete.Types (Suggestion, Suggestions(..), SuggestionResults, Terms)
-import Data.Array (length)
-import Data.Map (Map, lookup, insert)
-import Data.Maybe (Maybe(Just, Nothing))
-import Data.Tuple (Tuple(Tuple))
 import Prelude
+
+import Data.Array (length)
+import Data.List (List(Cons, Nil), (:), take)
+import Data.Map (Map, lookup, insert)
+import Data.Maybe (isJust, fromMaybe)
+import Data.Tuple (Tuple(Tuple))
+
+import Autocomplete.Types (Suggestion, Suggestions(..), SuggestionResults, Terms)
 
 -- | Stores searched terms so they can be recalled without re-querying.
 -- | Also stores the current search terms.
 newtype SuggesterState = SuggesterState { currentTerms :: Terms
                                         , currentResults :: Suggestions
-                                        , previousResults :: Suggestions
+                                        , termsHistory :: List Terms
                                         , store :: Map Terms Suggestions }
 
 instance eqSuggestionStore :: Eq SuggesterState where
@@ -28,22 +31,23 @@ updateSuggestions :: SuggesterAction -> SuggesterState -> SuggesterState
 updateSuggestions action (SuggesterState state) =
   case action of
     SetTerms terms ->
-      buildState terms state.currentResults state.store
+      let newHistory = state.currentTerms : state.termsHistory
+      in buildState terms newHistory state.store
     AddResults (Tuple terms results) ->
       let newStore = insert terms results state.store
-      in buildState state.currentTerms state.previousResults newStore
+      in buildState state.currentTerms state.termsHistory newStore
   where
-    buildState currentTerms previousResults store = SuggesterState
+    buildState currentTerms termsHistory store = SuggesterState
       { currentTerms
-      , previousResults
+      , termsHistory: take 100 termsHistory
       , store
-      , currentResults: case lookup currentTerms store of
-                          Nothing -> Loading (runSuggestions previousResults)
-                          Just results ->
-                            case length (runSuggestions results) of
-                              0 -> results `substitute` (runSuggestions previousResults)
-                              _ -> results
+      , currentResults:
+        let results = lookupOrLoading currentTerms store
+         in case length (runSuggestions results) of
+                 0 -> results `substitute` (getNextBestResults termsHistory store)
+                 _ -> results
       }
+
     runSuggestions :: Suggestions -> Array Suggestion
     runSuggestions (Loading a)  = a
     runSuggestions (Failed _ a) = a
@@ -54,16 +58,21 @@ updateSuggestions action (SuggesterState state) =
     substitute (Failed e _) r = Failed e r
     substitute (Ready _)    r = Ready r
 
+    lookupOrLoading :: Terms -> Map Terms Suggestions -> Suggestions
+    lookupOrLoading terms store = fromMaybe (Loading []) $ lookup terms store
+
+    getNextBestResults :: List Terms -> Map Terms Suggestions -> Array Suggestion
+    getNextBestResults Nil store = []
+    getNextBestResults (Cons terms history) store =
+      let results = runSuggestions $ lookupOrLoading terms store
+       in case length results of
+               0 -> getNextBestResults history store
+               _ -> results
+
 -- | Returns whether the store contains any form of results for the
--- | current terms.  Loading and failed search results are included.
+-- | current terms.
 hasSuggestionResults :: SuggesterState -> Boolean
-hasSuggestionResults (SuggesterState s) =
-  case lookup s.currentTerms s.store of
-    Nothing -> false
-    Just results ->
-      case results of
-        Ready _ -> true
-        _       -> false
+hasSuggestionResults (SuggesterState s) = isJust $ lookup s.currentTerms s.store
 
 -- | Find the results for the store's current terms, or an empty result set.
 getSuggestionResults :: SuggesterState -> Suggestions

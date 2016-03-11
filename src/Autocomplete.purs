@@ -12,7 +12,6 @@ import Autocomplete.Types (Terms, SuggestionResults, Suggestions(Failed))
 import Control.Monad.Aff (runAff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Exception (EXCEPTION, message)
-import Data.Argonaut.Decode (decodeJson)
 import Data.Either (either)
 import Data.Map (insert)
 import Data.Monoid (mempty)
@@ -47,10 +46,11 @@ type SuggesterInstance e = SuggesterEffects e
               -> SuggesterEffects e Unit
   }
 
--- | Create a suggester with the default API backend.
+-- | Create a suggester with the default API backend: Affjax.get & decodeJson,
+-- | no input debounce, and no input transformations.
 mkSuggester :: forall e. String -> SuggesterInstance e
 mkSuggester baseUri = mkSuggester' { api: mkDefaultApi baseUri
-                                   , inputDebounce: 100.0
+                                   , inputDebounce: 0.0
                                    , inputTransformer: id
                                    }
 
@@ -59,31 +59,23 @@ mkSuggester' :: forall e. SuggesterSettings -> SuggesterInstance e
 mkSuggester' settings = do
   termChan <- channel mempty
   searchResChan <- channel mempty
-
   let terms = SetTerms <~ dropRepeats (debounce settings.inputDebounce
                                               $ subscribe termChan)
-
       searchRes = AddResults <~ subscribe searchResChan
-
       suggesterActions = merge terms searchRes
-
       storeFoldp = foldp updateSuggestions initialStore suggesterActions
-
   stores <- unwrap $ storeFoldp
                   ~> \store -> do runSearch settings.api searchResChan store
                                   pure store
-
   let output = dropRepeats $ getSuggestionResults <~ stores
-
   pure { send: send termChan
        , subscribe: \cb -> runSignal (output ~> cb)
        }
-
   where
     initialStore :: SuggesterState
     initialStore = SuggesterState { currentTerms: mempty
                                   , currentResults: mempty
-                                  , previousResults: mempty
+                                  , termsHistory: mempty
                                   , store: insert mempty mempty mempty
                                   }
 
@@ -100,16 +92,10 @@ runSearch :: forall e.
 runSearch api chan st@(SuggesterState store) = do
   if terms == mempty || hasSuggestionResults st
     then pure unit
-    else runAff handleAjaxError handleParseResults search
+    else runAff handleAjaxError handleParseResults (api.getSuggestions terms)
   where
     terms = store.currentTerms
-
     handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []
-
     handleParseResults e = do
       let results = either (\msg -> Failed msg []) id e
       send chan $ Tuple terms results
-
-    search = do
-      res <- api.getSuggestions terms
-      pure $ decodeJson res.response

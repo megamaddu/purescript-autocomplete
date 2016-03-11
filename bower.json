@@ -26,7 +26,8 @@
     "purescript-affjax": "^0.12.0",
     "purescript-signal": "^5.0.0",
     "purescript-nonempty": "^0.2.0",
-    "purescript-arrays": "^0.4.5"
+    "purescript-arrays": "^0.4.5",
+    "purescript-lists": "^0.7.10"
   },
   "resolutions": {
     "purescript-aff": "^0.14.0"
