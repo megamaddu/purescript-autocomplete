@@ -1,6 +1,6 @@
 {
   "name": "purescript-autocomplete",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Module documentation on Pursuit: [purescript-autocomplete](https://pursuit.purescript.org/packages/purescript-autocomplete)",
   "main": "index.js",
   "directories": {
