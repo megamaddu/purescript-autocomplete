@@ -3,9 +3,10 @@ module Autocomplete.Store where
 import Prelude
 
 import Data.Array (length)
-import Data.List (List(Cons, Nil), (:), take)
+import Data.List (List(Nil, Cons), (:), take)
 import Data.Map (Map, lookup, insert)
 import Data.Maybe (isJust, fromMaybe)
+import Data.String (indexOf)
 import Data.Tuple (Tuple(Tuple))
 
 import Autocomplete.Types (Suggestion, Suggestions(..), SuggestionResults, Terms)
@@ -31,7 +32,9 @@ updateSuggestions :: SuggesterAction -> SuggesterState -> SuggesterState
 updateSuggestions action (SuggesterState state) =
   case action of
     SetTerms terms ->
-      let newHistory = state.currentTerms : state.termsHistory
+      let newHistory = if isJust $ indexOf state.currentTerms terms
+                          then state.currentTerms : state.termsHistory
+                          else Nil
       in buildState terms newHistory state.store
     AddResults (Tuple terms results) ->
       let newStore = insert terms results state.store
@@ -43,9 +46,9 @@ updateSuggestions action (SuggesterState state) =
       , store
       , currentResults:
         let results = lookupOrLoading currentTerms store
-         in case length (runSuggestions results) of
-                 0 -> results `substitute` (getNextBestResults termsHistory store)
-                 _ -> results
+        in case length (runSuggestions results) of
+                0 -> results `substitute` (getNextBestResults termsHistory store)
+                _ -> results
       }
 
     runSuggestions :: Suggestions -> Array Suggestion

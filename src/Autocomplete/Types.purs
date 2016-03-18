@@ -42,13 +42,13 @@ instance eqSuggestions :: Eq Suggestions where
   eq _            _             = false
 
 instance showSuggestion :: Show Suggestion where
-  show (Suggestion x) = "{phrase: '" <> x.phrase
-                   <> "', hits: "    <> show x.hits <> "}"
+  show (Suggestion x) = "{phrase: '" ++ x.phrase
+                   ++ "', hits: "    ++ show x.hits ++ "}"
 
 instance showSuggestions :: Show Suggestions where
-  show (Loading x)  = "Loading" <> show x
-  show (Failed e x) = "Failed(" <> e <> ")--" <> show x
-  show (Ready x)    = "Ready" <> show x
+  show (Loading x)  = "Loading" ++ show x
+  show (Failed e x) = "Failed(" ++ e ++ ")--" ++ show x
+  show (Ready x)    = "Ready" ++ show x
 
 instance semigroupSuggestions :: Semigroup Suggestions where
   append _ b = b

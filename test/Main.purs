@@ -37,20 +37,26 @@ main = runTest do
     let send = liftEff <<< suggester.send
 
     wait 30
+    send "c"
     send "ch"
-    wait 30
+    send "che"
+    send "chev"
+    send "chevr"
+    send "chevro"
     send "chevron"
     wait 200
     send "chevronx"
     wait 200
     send "chevron"
     wait 200
+    send "chevr"
+    wait 200
     send "foo"
     wait 30
     send "fooo"
     wait 200
     send "foo"
-    wait 30
+    wait 200
     send "fooo"
     wait 200
 
@@ -60,16 +66,19 @@ main = runTest do
                           -- , Suggestion { phrase: "chevron print", hits: 1.0 }
                           -- , Suggestion { phrase: "chevron infinity scarves", hits: 0.9 }
                           ]
-    equal [ Ready []
-          , Loading []
-          , Ready expectedMatches
-          , Loading expectedMatches
-          , Ready expectedMatches
-          -- , Ready expectedMatches -- this gets skipped because the output doesn't change
-          , Loading expectedMatches
-          , Ready expectedMatches
-          , Failed "Couldn't decode Array" expectedMatches
-          , Ready expectedMatches
+    equal [ Ready [] -- initial
+          , Loading [] -- "c" to "chevron" loading
+          , Ready expectedMatches -- "chevron" done
+          , Loading expectedMatches -- "chevronx" loading
+          , Ready expectedMatches -- "chevronx" done
+          -- , Ready expectedMatches -- "chevron" done -- skipped because output doesn't change
+          -- , Ready expectedMatches -- "chevr" done -- skipped because output doesn't change
+          , Loading [] -- "foo" loading, "fooo" Loading
+          , Ready [] -- "fooo" done
+          , Loading [] -- "foo" loading, "fooo" Loading
+          , Ready [] -- "fooo" done
+          , Failed "Couldn't decode Array" [] -- "foo" done
+          , Ready [] -- "fooo" done
           ]
           results
 
