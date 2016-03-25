@@ -38,11 +38,17 @@ main = runTest do
 
     wait 30
     send "c"
+    wait 30
     send "ch"
+    wait 30
     send "che"
+    wait 30
     send "chev"
+    wait 30
     send "chevr"
+    wait 30
     send "chevro"
+    wait 30
     send "chevron"
     wait 200
     send "chevronx"
@@ -50,6 +56,8 @@ main = runTest do
     send "chevron"
     wait 200
     send "chevr"
+    wait 200
+    send ""
     wait 200
     send "foo"
     wait 30
@@ -63,8 +71,8 @@ main = runTest do
     results <- liftEff $ readRef resultsRef
 
     let expectedMatches = [ Suggestion { phrase: "chevron infinity", hits: 1.1 }
-                          -- , Suggestion { phrase: "chevron print", hits: 1.0 }
-                          -- , Suggestion { phrase: "chevron infinity scarves", hits: 0.9 }
+                          , Suggestion { phrase: "chevron print", hits: 1.0 }
+                          , Suggestion { phrase: "chevron infinity scarves", hits: 0.9 }
                           ]
     equal [ Ready [] -- initial
           , Loading [] -- "c" to "chevron" loading
@@ -73,8 +81,7 @@ main = runTest do
           , Ready expectedMatches -- "chevronx" done
           -- , Ready expectedMatches -- "chevron" done -- skipped because output doesn't change
           -- , Ready expectedMatches -- "chevr" done -- skipped because output doesn't change
-          , Loading [] -- "foo" loading, "fooo" Loading
-          , Ready [] -- "fooo" done
+          , Ready [] -- "" done
           , Loading [] -- "foo" loading, "fooo" Loading
           , Ready [] -- "fooo" done
           , Failed "Couldn't decode Array" [] -- "foo" done
@@ -133,12 +140,12 @@ fakeSuggestionApi latency = { getSuggestions }
         mockResults =
           case t of
             "chevron" -> unsafeCoerce [ { phrase: "chevron infinity", weight: 1.1 }
-                                      -- , { phrase: "chevron print", weight: 1.0 }
-                                      -- , { phrase: "chevron infinity scarves", weight: 0.9 }
+                                      , { phrase: "chevron print", weight: 1.0 }
+                                      , { phrase: "chevron infinity scarves", weight: 0.9 }
                                       ]
             "foo" -> unsafeCoerce [ { pphrase: "chevron infinity", weight: 1 }
-                                  -- , { pphrase: "chevron print", weight: 1 }
-                                  -- , { pphrase: "chevron infinity scarves", weight: 0 }
+                                  , { pphrase: "chevron print", weight: 1 }
+                                  , { pphrase: "chevron infinity scarves", weight: 0 }
                                   ]
             _ -> unsafeCoerce []
 

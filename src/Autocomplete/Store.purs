@@ -6,7 +6,6 @@ import Data.Array (length)
 import Data.List (List(Nil, Cons), (:), take)
 import Data.Map (Map, lookup, insert)
 import Data.Maybe (isJust, fromMaybe)
-import Data.String (indexOf)
 import Data.Tuple (Tuple(Tuple))
 
 import Autocomplete.Types (Suggestion, Suggestions(..), SuggestionResults, Terms)
@@ -32,9 +31,9 @@ updateSuggestions :: SuggesterAction -> SuggesterState -> SuggesterState
 updateSuggestions action (SuggesterState state) =
   case action of
     SetTerms terms ->
-      let newHistory = if isJust $ indexOf state.currentTerms terms
-                          then state.currentTerms : state.termsHistory
-                          else Nil
+      let newHistory = if terms == ""
+                          then Nil
+                          else state.currentTerms : state.termsHistory
       in buildState terms newHistory state.store
     AddResults (Tuple terms results) ->
       let newStore = insert terms results state.store
@@ -62,7 +61,10 @@ updateSuggestions action (SuggesterState state) =
     substitute (Ready _)    r = Ready r
 
     lookupOrLoading :: Terms -> Map Terms Suggestions -> Suggestions
-    lookupOrLoading terms store = fromMaybe (Loading []) $ lookup terms store
+    lookupOrLoading terms store =
+      if terms == ""
+         then Ready []
+         else fromMaybe (Loading []) $ lookup terms store
 
     getNextBestResults :: List Terms -> Map Terms Suggestions -> Array Suggestion
     getNextBestResults Nil store = []
