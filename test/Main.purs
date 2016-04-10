@@ -15,13 +15,12 @@ import Data.Either (Either)
 import Network.HTTP.Affjax (AJAX)
 import Prelude
 import Signal.Channel as C
-import Signal.Time (since)
+import Signal.Time (debounce, since)
 import Test.Signal (expect)
 import Test.Unit (test, runTest)
 import Test.Util (wait)
 import Test.Unit.Assert (equal)
 import Unsafe.Coerce (unsafeCoerce)
-import Util.Signal (debounce, whenChangeTo, whenEqual)
 
 main :: Eff _ Unit
 main = runTest do
@@ -88,44 +87,6 @@ main = runTest do
           , Ready [] -- "fooo" done
           ]
           results
-
-  test "Util.Signal.whenEqual" do
-    chan <- fromArr [1,2,3,4,3,2,1,2,3,3,2,1,4]
-    let sig = whenEqual 3 $ C.subscribe chan
-    expect 50 sig [3,3,3,3]
-
-  test "Util.Signal.whenChangeTo" do
-    chan <- fromArr [1,2,3,4,3,2,1,2,3,3,2,1,4]
-    let sig = whenChangeTo 3 $ C.subscribe chan
-    expect 50 sig [3,3,3]
-
-  test "Util.Signal.since" do
-    chan <- liftEff $ C.channel 0
-    let sig = since 10.0 $ C.subscribe chan
-        send = liftEff <<< C.send chan
-
-    forkAff $ expect 50 sig [false,true,false,true,false]
-    wait 20
-    send 1
-    wait 20
-    send 2
-    wait 20
-
-  test "Util.Signal.debounce" do
-    chan <- liftEff $ C.channel 0
-    let sig = debounce 10.0 $ C.subscribe chan
-        send = liftEff <<< C.send chan
-
-    forkAff $ expect 50 sig [0,2,4]
-    wait 20
-    send 1
-    wait 5
-    send 2
-    wait 20
-    send 3
-    wait 5
-    send 4
-    wait 20
 
 fakeSuggestionApi :: Int -> SuggestionApi
 fakeSuggestionApi latency = { getSuggestions }

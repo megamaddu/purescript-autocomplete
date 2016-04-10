@@ -20,7 +20,7 @@ import Network.HTTP.Affjax (AJAX)
 import Prelude
 import Signal ((~>), (<~), runSignal, dropRepeats, unwrap, foldp, merge)
 import Signal.Channel (CHANNEL, Channel, send, subscribe, channel)
-import Util.Signal (debounce)
+import Signal.Time (debounce)
 
 type SuggesterSettings = { api :: SuggestionApi
                          , inputDebounce :: Number
