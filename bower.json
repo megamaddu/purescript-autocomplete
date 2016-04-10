@@ -1,6 +1,7 @@
 {
   "name": "purescript-autocomplete",
   "version": "1.3.0",
+  "license": "LICENSE",
   "repository": {
     "type": "git",
     "url": "git://github.com/jane/purescript-autocomplete.git"
