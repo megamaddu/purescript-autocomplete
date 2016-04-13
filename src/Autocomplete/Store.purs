@@ -17,10 +17,6 @@ newtype SuggesterState a = SuggesterState { currentTerms :: Terms
                                           , termsHistory :: List Terms
                                           , store :: Map Terms (Suggestions a) }
 
-instance eqSuggestionStore :: Eq a => Eq (SuggesterState a) where
-  eq (SuggesterState x) (SuggesterState y) = x.currentTerms == y.currentTerms
-                                          && x.currentResults == y.currentResults
-
 data SuggesterAction a
   = SetTerms Terms
   | AddResults (SuggestionResults a)
