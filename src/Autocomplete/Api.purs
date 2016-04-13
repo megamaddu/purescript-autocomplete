@@ -5,25 +5,25 @@ module Autocomplete.Api
 
 import Autocomplete.Types (Suggestions, Terms)
 import Control.Monad.Aff (Aff)
-import Data.Argonaut.Decode (decodeJson)
+import Data.Argonaut.Decode (class DecodeJson, decodeJson)
 import Data.Either (Either)
 import Global (encodeURIComponent)
 import Network.HTTP.Affjax (AJAX, get)
 import Prelude
 
-type SuggestionApi = { getSuggestions :: forall e.
+type SuggestionApi a = { getSuggestions :: forall e.
                                          Terms
                                       -> Aff ( ajax :: AJAX
                                              | e
-                                             ) (Either String Suggestions)
+                                             ) (Either String (Suggestions a))
                      }
 
-mkDefaultApi :: String -> SuggestionApi
+mkDefaultApi :: forall a. DecodeJson a => String -> SuggestionApi a
 mkDefaultApi baseUri = { getSuggestions }
   where
     getSuggestions :: forall e. Terms -> Aff ( ajax :: AJAX
                                              | e
-                                             ) (Either String Suggestions)
+                                             ) (Either String (Suggestions a))
     getSuggestions terms = do
       res <- get $ baseUri <> encodeURIComponent terms
       pure $ decodeJson res.response

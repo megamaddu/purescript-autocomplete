@@ -2,13 +2,14 @@ module Test.Main where
 
 import Autocomplete (mkSuggester')
 import Autocomplete.Api (SuggestionApi)
-import Autocomplete.Types (Terms, Suggestion(Suggestion), Suggestions(Ready, Loading, Failed))
+import Autocomplete.Types (Terms, Suggestions(Ready, Loading, Failed))
 import Control.Monad.Aff (Aff, forkAff, later, later')
 import Control.Monad.Eff (Eff, foreachE)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Ref (readRef, writeRef, newRef)
+import Data.Argonaut.Combinators ((.?))
 import Data.Argonaut.Core (Json)
-import Data.Argonaut.Decode (decodeJson)
+import Data.Argonaut.Decode (class DecodeJson, decodeJson)
 import Data.Array (snoc)
 import Data.Array.Unsafe (head, tail)
 import Data.Either (Either)
@@ -88,12 +89,27 @@ main = runTest do
           ]
           results
 
-fakeSuggestionApi :: Int -> SuggestionApi
+newtype Suggestion = Suggestion { phrase :: String, hits :: Number }
+
+derive instance eqSuggestion :: Eq Suggestion
+
+instance decodeJsonSuggestion :: DecodeJson Suggestion where
+  decodeJson json = do
+    obj <- decodeJson json
+    phrase <- obj .? "phrase"
+    hits <- obj .? "weight"
+    pure $ Suggestion { phrase, hits }
+
+instance showSuggestion :: Show Suggestion where
+  show (Suggestion x) = "{phrase: '" ++ x.phrase
+                   ++ "', hits: "    ++ show x.hits ++ "}"
+
+fakeSuggestionApi :: Int -> SuggestionApi Suggestion
 fakeSuggestionApi latency = { getSuggestions }
   where
     getSuggestions :: forall e. Terms -> Aff ( ajax :: AJAX
                                              | e
-                                             ) (Either String Suggestions)
+                                             ) (Either String (Suggestions Suggestion))
     getSuggestions t = later' latency $
       pure $ decodeJson mockResults
       where
