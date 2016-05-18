@@ -32,7 +32,7 @@ runTests :: forall e.
     )
 runTests =
   suite "Autocomplete" do
-  
+
     test "mkSuggester Send/Subscribe Integration Test" do
       resultsRef <- liftEff $ newRef []
       suggester <- liftEff $ mkSuggester' { api: fakeSuggestionApi 50
@@ -73,9 +73,13 @@ runTests =
       wait 200
       send "foo"
       wait 200
-      send "fooo"
+      send "chevron"
+      wait 200
+      send ""
       wait 200
       send "tunic"
+      wait 200
+      send ""
       wait 200
       send "chevron"
       wait 200
@@ -107,9 +111,11 @@ runTests =
         , Loading [] -- "foo" loading, "fooo" Loading
         , Ready [] -- "fooo" done
         , Failed "Couldn't decode Array" [] -- "foo" done
-        , Ready [] -- "fooo" done
+        , Ready chevronExpectedMatches -- "chevron" done
+        , Ready [] -- "" done
         , Loading [] -- "tunic" loading
         , Ready tunicExpectedMatches -- "tunic" done
+        , Ready [] -- "" done
         , Ready chevronExpectedMatches -- "chevron" done
         ]
         results
