@@ -1,7 +1,6 @@
 module Autocomplete.Store where
 
 import Prelude
-
 import Data.Array (length)
 import Data.List (List(Nil, Cons), (:), take)
 import Data.Map (Map, lookup, insert)
