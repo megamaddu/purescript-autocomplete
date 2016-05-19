@@ -3,13 +3,16 @@ module Test.Autocomplete.Store where
 import Prelude
 import Autocomplete.Store (SuggesterState(SuggesterState), SuggesterAction(AddResults, SetTerms), updateSuggestions)
 import Autocomplete.Types (Terms, Suggestions(Ready, Loading))
+import Control.Monad.Aff (Aff)
+import Control.Monad.Eff.Class (liftEff)
+import Control.Monad.ST (STRef, ST, readSTRef, modifySTRef, newSTRef)
 import Data.Foldable (foldl)
 import Data.Map (Map, singleton)
 import Data.Monoid (mempty)
 import Data.Tuple (Tuple(Tuple))
-import Debug.Trace (spy)
-import Test.Unit (failure, suite, test, TestSuite)
+import Test.Unit (suite, test, TestSuite)
 import Test.Unit.Assert (equal)
+import Unsafe.Coerce (unsafeCoerce)
 
 runTests :: forall e. TestSuite e
 runTests =
@@ -21,9 +24,9 @@ runTests =
 
     test "updateSuggestions returns empty Loading results for an empty store after terms are set" do
       let
-        updatedState = updateSuggestions (SetTerms "foo") emptyState
-      equal "foo" $ currentTerms updatedState
-      equal (Loading []) $ currentResults updatedState
+        state = updateSuggestions (SetTerms "foo") emptyState
+      equal "foo" $ currentTerms state
+      equal (Loading []) $ currentResults state
 
     test "updateSuggestions returns empty Ready results for a store after terms are set and results loaded" do
       let
@@ -33,7 +36,7 @@ runTests =
       equal "foo" $ currentTerms state2
       equal fooResults $ currentResults state2
 
-    test "updateSuggestions " do
+    test "updateSuggestions returns cached results in any order" $ runTestST do
       let
         ops =
           [ Tuple "f" (Ready ["a"])
@@ -43,11 +46,65 @@ runTests =
           , Tuple "foo" (Ready ["aaa"])
           , Tuple "bar" (Ready ["bbb"])
           ]
-        state1 = foldl (flip $ AddResults >>> updateSuggestions) emptyState ops
-      equal "" $ currentTerms state1
-      failure "-- finish test --"
+        initialState = foldl (flip $ AddResults >>> updateSuggestions) emptyState ops
 
--- setTerms :: Terms -> Aff
+      state <- liftEff $ newSTRef initialState
+
+      setTerms state "foo"
+      assertResults state $ Ready ["aaa"]
+
+      setTerms state "ba"
+      assertResults state $ Ready ["bb"]
+
+      setTerms state "b"
+      assertResults state $ Ready ["b"]
+
+      setTerms state ""
+      assertResults state $ Ready []
+
+      setTerms state "f"
+      assertResults state $ Ready ["a"]
+
+      setTerms state "fo"
+      assertResults state $ Ready ["aa"]
+
+      setTerms state "foo"
+      assertResults state $ Ready ["aaa"]
+
+      setTerms state ""
+      assertResults state $ Ready []
+
+      setTerms state "b"
+      assertResults state $ Ready ["b"]
+
+      setTerms state "ba"
+      assertResults state $ Ready ["bb"]
+
+      setTerms state "bar"
+      assertResults state $ Ready ["bbb"]
+
+runTestST :: forall e a.
+  Aff
+    (st :: ST a | e)
+    Unit
+  -> Aff e Unit
+runTestST = unsafeCoerce
+
+setTerms :: forall e a.
+  STRef (SuggesterState a) (SuggesterState a)
+  -> Terms
+  -> Aff (st :: ST (SuggesterState a) | e) Unit
+setTerms ref terms = do
+  _ <- liftEff $ modifySTRef ref $ updateSuggestions (SetTerms terms)
+  pure unit
+
+assertResults :: forall e a. (Eq a, Show a)
+  => STRef (SuggesterState a) (SuggesterState a)
+  -> Suggestions a
+  -> Aff (st :: ST (SuggesterState a) | e) Unit
+assertResults ref expected = do
+  state <- liftEff $ readSTRef ref
+  equal expected $ currentResults state
 
 currentTerms :: forall a. SuggesterState a -> Terms
 currentTerms (SuggesterState s) = s.currentTerms
