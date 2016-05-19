@@ -40,10 +40,12 @@ updateSuggestions action (SuggesterState state) =
       , termsHistory: take 100 termsHistory
       , store
       , currentResults:
-          let results = lookupOrLoading currentTerms store
-          in case length (runSuggestions results) of
-            0 -> results `substitute` (getNextBestResults termsHistory store)
-            _ -> results
+          let
+            results = lookupOrLoading currentTerms store
+          in
+            case length $ runSuggestions results of
+              0 -> results `substitute` getNextBestResults termsHistory store
+              _ -> results
       }
 
     runSuggestions (Loading a) = a
