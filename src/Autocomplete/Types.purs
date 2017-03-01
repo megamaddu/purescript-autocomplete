@@ -29,9 +29,9 @@ type SuggestionResults a = Tuple Terms (Suggestions a)
 derive instance eqSuggestions :: Eq a => Eq (Suggestions a)
 
 instance showSuggestions :: Show a => Show (Suggestions a) where
-  show (Loading x)  = "Loading" ++ show x
-  show (Failed e x) = "Failed(" ++ e ++ ")--" ++ show x
-  show (Ready x)    = "Ready" ++ show x
+  show (Loading x)  = "Loading" <> show x
+  show (Failed e x) = "Failed(" <> e <> ")--" <> show x
+  show (Ready x)    = "Ready" <> show x
 
 instance semigroupSuggestions :: Semigroup (Suggestions a) where
   append _ b = b

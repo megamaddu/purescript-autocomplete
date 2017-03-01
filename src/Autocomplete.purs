@@ -92,10 +92,10 @@ runSearch :: forall e a.
 runSearch api chan st@(SuggesterState store) = do
   if terms == mempty || hasSuggestionResults st
     then pure unit
-    else runAff handleAjaxError handleParseResults (api.getSuggestions terms)
+    else void $ runAff handleAjaxError handleParseResults (api.getSuggestions terms)
   where
     terms = store.currentTerms
     handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []
-    handleParseResults e = do
-      let results = either (\msg -> Failed msg []) id e
-      send chan $ Tuple terms results
+    handleParseResults e = send chan $ Tuple terms results
+      where results = either (\msg -> Failed msg []) id e
+ 

@@ -1,29 +1,42 @@
 module Test.Main where
 
+import Prelude
+import Signal.Channel as C
 import Autocomplete (mkSuggester')
 import Autocomplete.Api (SuggestionApi)
 import Autocomplete.Types (Terms, Suggestions(Ready, Loading, Failed))
 import Control.Monad.Aff (Aff, forkAff, later, later')
+import Control.Monad.Aff.AVar (AVAR)
+import Control.Monad.Aff.Console (CONSOLE)
 import Control.Monad.Eff (Eff, foreachE)
 import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Ref (readRef, writeRef, newRef)
-import Data.Argonaut.Combinators ((.?))
+import Control.Monad.Eff.Exception (EXCEPTION)
+import Control.Monad.Eff.Ref (REF, newRef, readRef, writeRef)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson, decodeJson)
+import Data.Argonaut.Decode.Combinators ((.?))
 import Data.Array (snoc)
-import Data.Array.Unsafe (head, tail)
+import Data.Array.Partial (head, tail)
 import Data.Either (Either)
 import Network.HTTP.Affjax (AJAX)
-import Prelude
-import Signal.Channel as C
-import Signal.Time (debounce, since)
-import Test.Signal (expect)
-import Test.Unit (test, runTest)
-import Test.Util (wait)
+import Partial.Unsafe (unsafePartial)
+import Signal.Channel (CHANNEL)
+import Test.Unit (test)
 import Test.Unit.Assert (equal)
+import Test.Unit.Console (TESTOUTPUT)
+import Test.Unit.Main (runTest)
+import Test.Util (wait)
 import Unsafe.Coerce (unsafeCoerce)
 
-main :: Eff _ Unit
+main :: Eff
+  ( console :: CONSOLE
+  , testOutput :: TESTOUTPUT
+  , avar :: AVAR
+  , ref :: REF
+  , channel :: CHANNEL
+  , ajax :: AJAX
+  , err :: EXCEPTION
+  ) Unit
 main = runTest do
   test "Autocomplete Send/Subscribe Integration Test" do
     resultsRef <- liftEff $ newRef []
@@ -84,7 +97,7 @@ main = runTest do
           , Ready [] -- "" done
           , Loading [] -- "foo" loading, "fooo" Loading
           , Ready [] -- "fooo" done
-          , Failed "Couldn't decode Array" [] -- "foo" done
+          , Failed "Couldn't decode Array: Expected field \"phrase\"" [] -- "foo" done
           , Ready [] -- "fooo" done
           ]
           results
@@ -101,8 +114,7 @@ instance decodeJsonSuggestion :: DecodeJson Suggestion where
     pure $ Suggestion { phrase, hits }
 
 instance showSuggestion :: Show Suggestion where
-  show (Suggestion x) = "{phrase: '" ++ x.phrase
-                   ++ "', hits: "    ++ show x.hits ++ "}"
+  show (Suggestion x) = "{phrase: '" <> x.phrase <> "', hits: " <> show x.hits <> "}"
 
 fakeSuggestionApi :: Int -> SuggestionApi Suggestion
 fakeSuggestionApi latency = { getSuggestions }
@@ -127,7 +139,7 @@ fakeSuggestionApi latency = { getSuggestions }
             _ -> unsafeCoerce []
 
 fromArr :: forall e a. Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
-fromArr arr = do
+fromArr arr = unsafePartial do
   chan <- liftEff $ C.channel (head arr)
   forkAff $ later $ liftEff $ foreachE (tail arr) \a -> do
     C.send chan a
