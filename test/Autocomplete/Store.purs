@@ -98,8 +98,8 @@ setTerms ref terms = do
   _ <- liftEff $ modifySTRef ref $ updateSuggestions (SetTerms terms)
   pure unit
 
-assertResults :: forall e a. (Eq a, Show a)
-  => STRef (SuggesterState a) (SuggesterState a)
+assertResults :: forall e a. Eq a => Show a =>
+  STRef (SuggesterState a) (SuggesterState a)
   -> Suggestions a
   -> Aff (st :: ST (SuggesterState a) | e) Unit
 assertResults ref expected = do

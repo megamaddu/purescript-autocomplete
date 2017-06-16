@@ -36,6 +36,6 @@
   },
   "devDependencies": {
     "purescript-test-unit": "^11.0.0",
-    "purescript-st": "^0.1.1"
+    "purescript-st": "^3.0.0"
   }
 }

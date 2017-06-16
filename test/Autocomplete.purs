@@ -1,23 +1,26 @@
 module Test.Autocomplete where
 
 import Prelude
-import Signal.Channel as C
+
 import Autocomplete (mkSuggester')
 import Autocomplete.Api (SuggestionApi)
 import Autocomplete.Types (Terms, Suggestions(Ready, Loading, Failed))
-import Control.Monad.Aff (Aff, forkAff, later, later')
+import Control.Monad.Aff (Aff, forkAff, delay)
 import Control.Monad.Eff (foreachE)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Ref (REF, readRef, writeRef, newRef)
-import Data.Argonaut.Combinators ((.?))
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson, decodeJson)
+import Data.Argonaut.Decode.Combinators ((.?))
 import Data.Array (snoc)
-import Data.Array.Unsafe (head, tail)
+import Data.Array.Partial (head, tail)
 import Data.Either (Either)
+import Data.Int (toNumber)
+import Data.Time.Duration (Milliseconds(..))
 import Network.HTTP.Affjax (AJAX)
 import Signal.Channel (CHANNEL)
+import Signal.Channel as C
 import Test.Unit (TestSuite, suite, test)
 import Test.Unit.Assert (equal)
 import Unsafe.Coerce (unsafeCoerce)
@@ -35,10 +38,11 @@ runTests =
 
     test "mkSuggester Send/Subscribe Integration Test" do
       resultsRef <- liftEff $ newRef []
-      suggester <- liftEff $ mkSuggester' { api: fakeSuggestionApi 50
-                                          , inputDebounce: 0.0
-                                          , inputTransformer: id
-                                          }
+      suggester <- liftEff $ mkSuggester'
+        { api: fakeSuggestionApi $ Milliseconds 50.0
+        , inputDebounce: Milliseconds 0.0
+        , inputTransformer: id
+        }
       liftEff $ suggester.subscribe \suggestions -> do
         results <- readRef resultsRef
         writeRef resultsRef $ snoc results suggestions
@@ -110,7 +114,7 @@ runTests =
         , Ready [] -- "" done
         , Loading [] -- "foo" loading, "fooo" Loading
         , Ready [] -- "fooo" done
-        , Failed "Couldn't decode Array" [] -- "foo" done
+        , Failed "Couldn't decode Array: Expected field \"phrase\"" [] -- "foo" done
         , Ready chevronExpectedMatches -- "chevron" done
         , Ready [] -- "" done
         , Loading [] -- "tunic" loading
@@ -132,9 +136,9 @@ instance decodeJsonSuggestion :: DecodeJson Suggestion where
     pure $ Suggestion { phrase, hits }
 
 instance showSuggestion :: Show Suggestion where
-  show (Suggestion x) = "{phrase: '" ++ x.phrase ++ "', hits: "    ++ show x.hits ++ "}"
+  show (Suggestion x) = "{phrase: '" <> x.phrase <> "', hits: " <> show x.hits <> "}"
 
-fakeSuggestionApi :: Int -> SuggestionApi Suggestion
+fakeSuggestionApi :: Milliseconds -> SuggestionApi Suggestion
 fakeSuggestionApi latency = { getSuggestions }
   where
     getSuggestions :: forall e.
@@ -142,7 +146,9 @@ fakeSuggestionApi latency = { getSuggestions }
                    (Either
                       String
                       (Suggestions Suggestion))
-    getSuggestions t = later' latency (pure $ decodeJson mockResults)
+    getSuggestions t = do
+      delay latency
+      pure $ decodeJson mockResults
       where
         mockResults :: Json
         mockResults =
@@ -168,13 +174,13 @@ fakeSuggestionApi latency = { getSuggestions }
             _ ->
               unsafeCoerce []
 
-fromArr :: forall e a. Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
+fromArr :: forall e a. Partial => Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
 fromArr arr = do
   chan <- liftEff $ C.channel (head arr)
-  forkAff $ later $ liftEff $ foreachE (tail arr) \a -> do
+  _ <- forkAff $ liftEff $ foreachE (tail arr) \a -> do
     C.send chan a
     pure unit
   pure chan
 
 wait :: forall e. Int -> Aff e Unit
-wait t = later' t $ pure unit
+wait t = delay $ Milliseconds $ toNumber t
