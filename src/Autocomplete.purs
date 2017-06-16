@@ -52,7 +52,7 @@ type SuggesterInstance e a = SuggesterEffects e
 
 -- | Create a suggester with the default API backend: Affjax.get & decodeJson,
 -- | no input debounce, and no input transformations.
-mkSuggester :: forall e a. (Eq a, DecodeJson a) => String -> SuggesterInstance e a
+mkSuggester :: forall e a. Eq a => DecodeJson a => String -> SuggesterInstance e a
 mkSuggester baseUri = mkSuggester'
   { api: mkDefaultApi baseUri
   , inputDebounce: 0.0

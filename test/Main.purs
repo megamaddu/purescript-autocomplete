@@ -1,11 +1,11 @@
 module Test.Main where
 
 import Prelude
-import Signal.Channel as C
+
 import Autocomplete (mkSuggester')
 import Autocomplete.Api (SuggestionApi)
 import Autocomplete.Types (Terms, Suggestions(Ready, Loading, Failed))
-import Control.Monad.Aff (Aff, forkAff, later, later')
+import Control.Monad.Aff (Aff, delay, forkAff)
 import Control.Monad.Aff.AVar (AVAR)
 import Control.Monad.Aff.Console (CONSOLE, log)
 import Control.Monad.Eff (Eff, foreachE)
@@ -19,9 +19,11 @@ import Data.Argonaut.Decode.Combinators ((.?))
 import Data.Array (snoc)
 import Data.Array.Partial (head, tail)
 import Data.Either (Either)
+import Data.Time.Duration (Milliseconds(..))
 import Network.HTTP.Affjax (AJAX)
 import Partial.Unsafe (unsafePartial)
 import Signal.Channel (CHANNEL)
+import Signal.Channel as C
 import Test.Unit (test)
 import Test.Unit.Assert (equal)
 import Test.Unit.Console (TESTOUTPUT)
@@ -41,7 +43,7 @@ main :: Eff
 main = runTest do
   test "Autocomplete Send/Subscribe Integration Test" do
     resultsRef <- liftEff $ newRef []
-    let fakeApi = fakeSuggestionApi 50
+    let fakeApi = fakeSuggestionApi $ Milliseconds 50.0
     suggester <- liftEff $ mkSuggester' $
                   { api: fakeApi.api
                   , inputDebounce: 0.0
@@ -106,8 +108,6 @@ main = runTest do
           results
     log =<< show <$> liftEff fakeApi.getRequestCount
 
-    equal true false
-
 newtype Suggestion = Suggestion { phrase :: String, hits :: Number }
 
 derive instance eqSuggestion :: Eq Suggestion
@@ -122,7 +122,7 @@ instance decodeJsonSuggestion :: DecodeJson Suggestion where
 instance showSuggestion :: Show Suggestion where
   show (Suggestion x) = "{phrase: '" <> x.phrase <> "', hits: " <> show x.hits <> "}"
 
-fakeSuggestionApi :: Int -> { api :: SuggestionApi Suggestion, getRequestCount :: forall e. Eff (ref :: REF | e) Int }
+fakeSuggestionApi :: Milliseconds -> { api :: SuggestionApi Suggestion, getRequestCount :: forall e. Eff (ref :: REF | e) Int }
 fakeSuggestionApi latency =
   { api: { getSuggestions }
   , getRequestCount
@@ -138,7 +138,8 @@ fakeSuggestionApi latency =
           ) (Either String (Suggestions Suggestion))
     getSuggestions t = do
       let unused = unsafePerformEff $ modifyRef counterRef (_ + 1)
-      later' latency $ pure $ decodeJson mockResults
+      delay latency
+      pure $ decodeJson mockResults
       where
         mockResults :: Json
         mockResults =
@@ -160,7 +161,9 @@ fakeSuggestionApi latency =
 fromArr :: forall e a. Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
 fromArr arr = unsafePartial do
   chan <- liftEff $ C.channel (head arr)
-  forkAff $ later $ liftEff $ foreachE (tail arr) \a -> do
-    C.send chan a
-    pure unit
+  _ <- forkAff $ do
+    delay (Milliseconds 0.0)
+    liftEff $ foreachE (tail arr) \a -> do
+      C.send chan a
+      pure unit
   pure chan
