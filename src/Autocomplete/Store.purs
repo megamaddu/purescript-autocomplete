@@ -27,9 +27,10 @@ updateSuggestions :: forall a. SuggesterAction a -> SuggesterState a -> Suggeste
 updateSuggestions action (SuggesterState state) =
   case action of
     SetTerms terms ->
-      let newHistory = if terms == ""
-                          then Nil
-                          else state.currentTerms : state.termsHistory
+      let newHistory =
+            if terms == ""
+              then Nil
+              else state.currentTerms : state.termsHistory
       in buildState terms newHistory state.store
     AddResults (Tuple terms results) ->
       let newStore = insert terms results state.store
@@ -40,31 +41,31 @@ updateSuggestions action (SuggesterState state) =
       , termsHistory: take 100 termsHistory
       , store
       , currentResults:
-        let results = lookupOrLoading currentTerms store
-        in case length (runSuggestions results) of
-                0 -> results `substitute` (getNextBestResults termsHistory store)
-                _ -> results
+          let results = lookupOrLoading currentTerms store
+          in case length (runSuggestions results) of
+            0 -> results `substitute` (getNextBestResults termsHistory store)
+            _ -> results
       }
 
-    runSuggestions (Loading a)  = a
+    runSuggestions (Loading a) = a
     runSuggestions (Failed _ a) = a
-    runSuggestions (Ready a)    = a
+    runSuggestions (Ready a) = a
 
-    substitute (Loading _)  r = Loading r
+    substitute (Loading _) r = Loading r
     substitute (Failed e _) r = Failed e r
-    substitute (Ready _)    r = Ready r
+    substitute (Ready _) r = Ready r
 
     lookupOrLoading terms store =
       if terms == ""
-         then Ready []
-         else fromMaybe (Loading []) $ lookup terms store
+        then Ready []
+        else fromMaybe (Loading []) $ lookup terms store
 
     getNextBestResults Nil store = []
     getNextBestResults (Cons terms history) store =
       let results = runSuggestions $ lookupOrLoading terms store
-       in case length results of
-               0 -> getNextBestResults history store
-               _ -> results
+      in case length results of
+        0 -> getNextBestResults history store
+        _ -> results
 
 -- | Returns whether the store contains any form of results for the
 -- | current terms.

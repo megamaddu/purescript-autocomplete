@@ -7,11 +7,12 @@ import Autocomplete.Api (SuggestionApi)
 import Autocomplete.Types (Terms, Suggestions(Ready, Loading, Failed))
 import Control.Monad.Aff (Aff, forkAff, later, later')
 import Control.Monad.Aff.AVar (AVAR)
-import Control.Monad.Aff.Console (CONSOLE)
+import Control.Monad.Aff.Console (CONSOLE, log)
 import Control.Monad.Eff (Eff, foreachE)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Exception (EXCEPTION)
-import Control.Monad.Eff.Ref (REF, newRef, readRef, writeRef)
+import Control.Monad.Eff.Ref (REF, modifyRef, newRef, readRef, writeRef)
+import Control.Monad.Eff.Unsafe (unsafePerformEff)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Decode (class DecodeJson, decodeJson)
 import Data.Argonaut.Decode.Combinators ((.?))
@@ -40,10 +41,12 @@ main :: Eff
 main = runTest do
   test "Autocomplete Send/Subscribe Integration Test" do
     resultsRef <- liftEff $ newRef []
-    suggester <- liftEff $ mkSuggester' $ { api: fakeSuggestionApi 50
-                                          , inputDebounce: 0.0
-                                          , inputTransformer: id
-                                          }
+    let fakeApi = fakeSuggestionApi 50
+    suggester <- liftEff $ mkSuggester' $
+                  { api: fakeApi.api
+                  , inputDebounce: 0.0
+                  , inputTransformer: id
+                  }
     liftEff $ suggester.subscribe \suggestions -> do
       results <- readRef resultsRef
       writeRef resultsRef $ snoc results suggestions
@@ -101,6 +104,9 @@ main = runTest do
           , Ready [] -- "fooo" done
           ]
           results
+    log =<< show <$> liftEff fakeApi.getRequestCount
+
+    equal true false
 
 newtype Suggestion = Suggestion { phrase :: String, hits :: Number }
 
@@ -116,27 +122,40 @@ instance decodeJsonSuggestion :: DecodeJson Suggestion where
 instance showSuggestion :: Show Suggestion where
   show (Suggestion x) = "{phrase: '" <> x.phrase <> "', hits: " <> show x.hits <> "}"
 
-fakeSuggestionApi :: Int -> SuggestionApi Suggestion
-fakeSuggestionApi latency = { getSuggestions }
+fakeSuggestionApi :: Int -> { api :: SuggestionApi Suggestion, getRequestCount :: forall e. Eff (ref :: REF | e) Int }
+fakeSuggestionApi latency =
+  { api: { getSuggestions }
+  , getRequestCount
+  }
   where
-    getSuggestions :: forall e. Terms -> Aff ( ajax :: AJAX
-                                             | e
-                                             ) (Either String (Suggestions Suggestion))
-    getSuggestions t = later' latency $
-      pure $ decodeJson mockResults
+    counterRef = unsafePerformEff $ newRef 0
+
+    getSuggestions :: forall e.
+      Terms
+      -> Aff
+          ( ajax :: AJAX
+          | e
+          ) (Either String (Suggestions Suggestion))
+    getSuggestions t = do
+      let unused = unsafePerformEff $ modifyRef counterRef (_ + 1)
+      later' latency $ pure $ decodeJson mockResults
       where
         mockResults :: Json
         mockResults =
           case t of
-            "chevron" -> unsafeCoerce [ { phrase: "chevron infinity", weight: 1.1 }
-                                      , { phrase: "chevron print", weight: 1.0 }
-                                      , { phrase: "chevron infinity scarves", weight: 0.9 }
-                                      ]
-            "foo" -> unsafeCoerce [ { pphrase: "chevron infinity", weight: 1 }
-                                  , { pphrase: "chevron print", weight: 1 }
-                                  , { pphrase: "chevron infinity scarves", weight: 0 }
-                                  ]
+            "chevron" -> unsafeCoerce
+              [ { phrase: "chevron infinity", weight: 1.1 }
+              , { phrase: "chevron print", weight: 1.0 }
+              , { phrase: "chevron infinity scarves", weight: 0.9 }
+              ]
+            "foo" -> unsafeCoerce
+              [ { pphrase: "chevron infinity", weight: 1 }
+              , { pphrase: "chevron print", weight: 1 }
+              , { pphrase: "chevron infinity scarves", weight: 0 }
+              ]
             _ -> unsafeCoerce []
+    
+    getRequestCount = readRef counterRef
 
 fromArr :: forall e a. Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
 fromArr arr = unsafePartial do

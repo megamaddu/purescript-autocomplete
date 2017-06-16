@@ -23,17 +23,20 @@ import Signal ((~>), (<~), runSignal, dropRepeats, unwrap, foldp, merge)
 import Signal.Channel (CHANNEL, Channel, send, subscribe, channel)
 import Signal.Time (debounce)
 
-type SuggesterSettings a = { api :: SuggestionApi a
-                           , inputDebounce :: Number
-                           , inputTransformer :: Terms -> Terms
-                           }
+type SuggesterSettings a =
+  { api :: SuggestionApi a
+  , inputDebounce :: Number
+  , inputTransformer :: Terms -> Terms
+  }
 
 -- | All effects induced by a suggester during its lifespan.
-type SuggesterEffects e a = Eff ( channel :: CHANNEL
-                                , ajax :: AJAX
-                                , err :: EXCEPTION
-                                | e
-                                ) a
+type SuggesterEffects e a =
+  Eff
+    ( channel :: CHANNEL
+    , ajax :: AJAX
+    , err :: EXCEPTION
+    | e
+    ) a
 
 -- | A suggester instance has a `send` function for providing new terms
 -- | and a subscribe function for listening for new suggestions.
@@ -44,16 +47,17 @@ type SuggesterEffects e a = Eff ( channel :: CHANNEL
 type SuggesterInstance e a = SuggesterEffects e
   { send :: Terms -> SuggesterEffects e Unit
   , subscribe :: (Suggestions a -> SuggesterEffects e Unit)
-              -> SuggesterEffects e Unit
+                  -> SuggesterEffects e Unit
   }
 
 -- | Create a suggester with the default API backend: Affjax.get & decodeJson,
 -- | no input debounce, and no input transformations.
 mkSuggester :: forall e a. (Eq a, DecodeJson a) => String -> SuggesterInstance e a
-mkSuggester baseUri = mkSuggester' { api: mkDefaultApi baseUri
-                                   , inputDebounce: 0.0
-                                   , inputTransformer: id
-                                   }
+mkSuggester baseUri = mkSuggester'
+  { api: mkDefaultApi baseUri
+  , inputDebounce: 0.0
+  , inputTransformer: id
+  }
 
 -- | Create a suggester with an alternate API backend.
 mkSuggester' :: forall e a. Eq a => SuggesterSettings a -> SuggesterInstance e a
@@ -73,22 +77,24 @@ mkSuggester' settings = do
        , subscribe: \cb -> runSignal (output ~> cb)
        }
   where
-    initialStore = SuggesterState { currentTerms: mempty
-                                  , currentResults: mempty
-                                  , termsHistory: mempty
-                                  , store: insert mempty mempty mempty
-                                  }
+    initialStore = SuggesterState
+      { currentTerms: mempty
+      , currentResults: mempty
+      , termsHistory: mempty
+      , store: insert mempty mempty mempty
+      }
 
 -- | Internal function for running the API backend and decoding results.
 runSearch :: forall e a.
-             SuggestionApi a
-          -> Channel (SuggestionResults a)
-          -> (SuggesterState a)
-          -> Eff ( channel :: CHANNEL
-                 , ajax :: AJAX
-                 , err :: EXCEPTION
-                 | e
-                 ) Unit
+  SuggestionApi a
+  -> Channel (SuggestionResults a)
+  -> (SuggesterState a)
+  -> Eff
+      ( channel :: CHANNEL
+      , ajax :: AJAX
+      , err :: EXCEPTION
+      | e
+      ) Unit
 runSearch api chan st@(SuggesterState store) = do
   if terms == mempty || hasSuggestionResults st
     then pure unit
