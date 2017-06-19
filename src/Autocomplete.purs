@@ -6,26 +6,28 @@ module Autocomplete
   , SuggesterInstance
   ) where
 
+import Prelude
+
 import Autocomplete.Api (SuggestionApi, mkDefaultApi)
 import Autocomplete.Store (SuggesterState(SuggesterState), SuggesterAction(SetTerms, AddResults), hasSuggestionResults, getSuggestionResults, updateSuggestions)
-import Autocomplete.Types (Terms, SuggestionResults, Suggestions(Failed))
+import Autocomplete.Types (Terms, SuggestionResults, Suggestions(Loading, Failed))
 import Control.Monad.Aff (runAff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Exception (EXCEPTION, message)
 import Data.Argonaut.Decode (class DecodeJson)
 import Data.Either (either)
-import Data.Map (insert)
+import Data.Map (singleton)
 import Data.Monoid (mempty)
+import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (Tuple(Tuple))
 import Network.HTTP.Affjax (AJAX)
-import Prelude
 import Signal ((~>), (<~), runSignal, dropRepeats, unwrap, foldp, merge)
 import Signal.Channel (CHANNEL, Channel, send, subscribe, channel)
 import Signal.Time (debounce)
 
 type SuggesterSettings a =
   { api :: SuggestionApi a
-  , inputDebounce :: Number
+  , inputDebounce :: Milliseconds
   , inputTransformer :: Terms -> Terms
   }
 
@@ -55,7 +57,7 @@ type SuggesterInstance e a = SuggesterEffects e
 mkSuggester :: forall e a. Eq a => DecodeJson a => String -> SuggesterInstance e a
 mkSuggester baseUri = mkSuggester'
   { api: mkDefaultApi baseUri
-  , inputDebounce: 0.0
+  , inputDebounce: Milliseconds 0.0
   , inputTransformer: id
   }
 
@@ -64,11 +66,14 @@ mkSuggester' :: forall e a. Eq a => SuggesterSettings a -> SuggesterInstance e a
 mkSuggester' settings = do
   termChan <- channel mempty
   searchResChan <- channel mempty
-  let terms = SetTerms <~ dropRepeats (debounce settings.inputDebounce
-                                              $ subscribe termChan)
-      searchRes = AddResults <~ subscribe searchResChan
-      suggesterActions = merge terms searchRes
-      storeFoldp = foldp updateSuggestions initialStore suggesterActions
+  let
+    terms = SetTerms <~ dropRepeats
+      ( debounce (case settings.inputDebounce of Milliseconds s -> s)
+        $ subscribe termChan
+      )
+    searchRes = AddResults <~ subscribe searchResChan
+    suggesterActions = merge terms searchRes
+    storeFoldp = foldp updateSuggestions initialStore suggesterActions
   stores <- unwrap $ storeFoldp
                   ~> \store -> do runSearch settings.api searchResChan store
                                   pure store
@@ -81,7 +86,7 @@ mkSuggester' settings = do
       { currentTerms: mempty
       , currentResults: mempty
       , termsHistory: mempty
-      , store: insert mempty mempty mempty
+      , store: singleton mempty mempty
       }
 
 -- | Internal function for running the API backend and decoding results.
@@ -98,7 +103,9 @@ runSearch :: forall e a.
 runSearch api chan st@(SuggesterState store) = do
   if terms == mempty || hasSuggestionResults st
     then pure unit
-    else void $ runAff handleAjaxError handleParseResults (api.getSuggestions terms)
+    else void do
+      send chan $ Tuple terms $ Loading []
+      runAff handleAjaxError handleParseResults (api.getSuggestions terms)
   where
     terms = store.currentTerms
     handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []

@@ -2,13 +2,12 @@ module Autocomplete.Store where
 
 import Prelude
 
+import Autocomplete.Types (Suggestions(..), SuggestionResults, Terms)
 import Data.Array (length)
 import Data.List (List(Nil, Cons), (:), take)
 import Data.Map (Map, lookup, insert)
 import Data.Maybe (isJust, fromMaybe)
 import Data.Tuple (Tuple(Tuple))
-
-import Autocomplete.Types (Suggestions(..), SuggestionResults, Terms)
 
 -- | Stores searched terms so they can be recalled without re-querying.
 -- | Also stores the current search terms.
@@ -41,10 +40,12 @@ updateSuggestions action (SuggesterState state) =
       , termsHistory: take 100 termsHistory
       , store
       , currentResults:
-          let results = lookupOrLoading currentTerms store
-          in case length (runSuggestions results) of
-            0 -> results `substitute` (getNextBestResults termsHistory store)
-            _ -> results
+          let
+            results = lookupOrLoading currentTerms store
+          in
+            case length $ runSuggestions results of
+              0 -> results `substitute` getNextBestResults termsHistory store
+              _ -> results
       }
 
     runSuggestions (Loading a) = a
