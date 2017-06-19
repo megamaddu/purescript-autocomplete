@@ -46,7 +46,9 @@ runTests =
       liftEff $ suggester.subscribe \suggestions -> do
         results <- readRef resultsRef
         writeRef resultsRef $ snoc results suggestions
-      let send = liftEff <<< suggester.send
+
+      let
+        send = liftEff <<< suggester.send
 
       wait 30
       send "c"
@@ -177,9 +179,11 @@ fakeSuggestionApi latency = { getSuggestions }
 fromArr :: forall e a. Partial => Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
 fromArr arr = do
   chan <- liftEff $ C.channel (head arr)
-  _ <- forkAff $ liftEff $ foreachE (tail arr) \a -> do
-    C.send chan a
-    pure unit
+  _ <- forkAff do
+    delay $ Milliseconds 0.0
+    liftEff $ foreachE (tail arr) \a -> do
+      C.send chan a
+      pure unit
   pure chan
 
 wait :: forall e. Int -> Aff e Unit

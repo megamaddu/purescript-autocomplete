@@ -10,7 +10,7 @@ import Prelude
 
 import Autocomplete.Api (SuggestionApi, mkDefaultApi)
 import Autocomplete.Store (SuggesterState(SuggesterState), SuggesterAction(SetTerms, AddResults), hasSuggestionResults, getSuggestionResults, updateSuggestions)
-import Autocomplete.Types (Terms, SuggestionResults, Suggestions(Failed))
+import Autocomplete.Types (Terms, SuggestionResults, Suggestions(Loading, Failed))
 import Control.Monad.Aff (runAff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Exception (EXCEPTION, message)
@@ -103,7 +103,9 @@ runSearch :: forall e a.
 runSearch api chan st@(SuggesterState store) = do
   if terms == mempty || hasSuggestionResults st
     then pure unit
-    else void $ runAff handleAjaxError handleParseResults (api.getSuggestions terms)
+    else void do
+      send chan $ Tuple terms $ Loading []
+      runAff handleAjaxError handleParseResults (api.getSuggestions terms)
   where
     terms = store.currentTerms
     handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []
