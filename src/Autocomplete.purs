@@ -1,44 +1,33 @@
 module Autocomplete
   ( mkSuggester
   , mkSuggester'
+  , FetchFn
   , SuggesterSettings
-  , SuggesterEffects
   , SuggesterInstance
   ) where
 
 import Prelude
 
-import Autocomplete.Api (SuggestionApi, mkDefaultApi)
 import Autocomplete.Store (SuggesterState(SuggesterState), SuggesterAction(SetTerms, AddResults), hasSuggestionResults, getSuggestionResults, updateSuggestions)
-import Autocomplete.Types (Terms, SuggestionResults, Suggestions(Loading, Failed))
-import Control.Monad.Aff (runAff)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Exception (EXCEPTION, message)
-import Data.Argonaut.Decode (class DecodeJson)
-import Data.Either (either)
+import Autocomplete.Types (SuggestionResults, Suggestions(..), Terms)
+import Data.Either (Either, either)
 import Data.Map (singleton)
-import Data.Monoid (mempty)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (Tuple(Tuple))
-import Network.HTTP.Affjax (AJAX)
+import Effect (Effect)
+import Effect.Aff (Aff, runAff_)
+import Effect.Exception (message)
 import Signal ((~>), (<~), runSignal, dropRepeats, unwrap, foldp, merge)
-import Signal.Channel (CHANNEL, Channel, send, subscribe, channel)
+import Signal.Channel (Channel, send, subscribe, channel)
 import Signal.Time (debounce)
 
+type FetchFn a = Terms -> Aff (Either String (Array a))
+
 type SuggesterSettings a =
-  { api :: SuggestionApi a
+  { fetch :: FetchFn a
   , inputDebounce :: Milliseconds
   , inputTransformer :: Terms -> Terms
   }
-
--- | All effects induced by a suggester during its lifespan.
-type SuggesterEffects e a =
-  Eff
-    ( channel :: CHANNEL
-    , ajax :: AJAX
-    , err :: EXCEPTION
-    | e
-    ) a
 
 -- | A suggester instance has a `send` function for providing new terms
 -- | and a subscribe function for listening for new suggestions.
@@ -46,23 +35,22 @@ type SuggesterEffects e a =
 -- | suggestions for the latest terms sent, even if a previous search is
 -- | slow to complete.  Subscribers immediately receive the most recent
 -- | result set.
-type SuggesterInstance e a = SuggesterEffects e
-  { send :: Terms -> SuggesterEffects e Unit
-  , subscribe :: (Suggestions a -> SuggesterEffects e Unit)
-                  -> SuggesterEffects e Unit
+type SuggesterInstance a = Effect
+  { send :: Terms -> Effect Unit
+  , subscribe :: (Suggestions a -> Effect Unit) -> Effect Unit
   }
 
 -- | Create a suggester with the default API backend: Affjax.get & decodeJson,
 -- | no input debounce, and no input transformations.
-mkSuggester :: forall e a. Eq a => DecodeJson a => String -> SuggesterInstance e a
-mkSuggester baseUri = mkSuggester'
-  { api: mkDefaultApi baseUri
+mkSuggester :: forall a . Eq a => FetchFn a -> SuggesterInstance a
+mkSuggester fetch = mkSuggester'
+  { fetch
   , inputDebounce: Milliseconds 0.0
-  , inputTransformer: id
+  , inputTransformer: identity
   }
 
 -- | Create a suggester with an alternate API backend.
-mkSuggester' :: forall e a. Eq a => SuggesterSettings a -> SuggesterInstance e a
+mkSuggester' :: forall a. Eq a => SuggesterSettings a -> SuggesterInstance a
 mkSuggester' settings = do
   termChan <- channel mempty
   searchResChan <- channel mempty
@@ -75,7 +63,7 @@ mkSuggester' settings = do
     suggesterActions = merge terms searchRes
     storeFoldp = foldp updateSuggestions initialStore suggesterActions
   stores <- unwrap $ storeFoldp
-                  ~> \store -> do runSearch settings.api searchResChan store
+                  ~> \store -> do runSearch settings.fetch searchResChan store
                                   pure store
   let output = dropRepeats $ getSuggestionResults <~ stores
   pure { send: send termChan
@@ -89,26 +77,22 @@ mkSuggester' settings = do
       , store: singleton mempty mempty
       }
 
--- | Internal function for running the API backend and decoding results.
-runSearch :: forall e a.
-  SuggestionApi a
+-- | Internal function for running the fetch function when needed.
+runSearch
+  :: forall a
+   . FetchFn a
   -> Channel (SuggestionResults a)
   -> (SuggesterState a)
-  -> Eff
-      ( channel :: CHANNEL
-      , ajax :: AJAX
-      , err :: EXCEPTION
-      | e
-      ) Unit
-runSearch api chan st@(SuggesterState store) = do
+  -> Effect Unit
+runSearch fetch chan st@(SuggesterState store) = do
   if terms == mempty || hasSuggestionResults st
     then pure unit
     else void do
       send chan $ Tuple terms $ Loading []
-      runAff handleAjaxError handleParseResults (api.getSuggestions terms)
+      runAff_ (either handleAjaxError handleParseResults) (fetch terms)
   where
     terms = store.currentTerms
     handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []
     handleParseResults e = send chan $ Tuple terms results
-      where results = either (\msg -> Failed msg []) id e
+      where results = either (\msg -> Failed msg []) Ready e
  

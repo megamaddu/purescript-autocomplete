@@ -7,7 +7,6 @@
     "test": "test"
   },
   "scripts": {
-    "postinstall": "bower install",
     "start": "pscid --test",
     "build": "pulp build",
     "test": "pulp test"
@@ -24,9 +23,9 @@
   },
   "homepage": "https://github.com/jane/purescript-autocomplete#readme",
   "devDependencies": {
-    "bower": "^1.8.0",
-    "pscid": "^2.0.2",
-    "pulp": "^11.0.0",
-    "purescript": "^0.11.5"
+    "bower": "^1.8.4",
+    "pscid": "^2.5.3",
+    "pulp": "^12.2.0",
+    "purescript": "^0.12.0"
   }
 }
