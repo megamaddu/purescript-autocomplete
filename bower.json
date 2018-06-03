@@ -16,26 +16,21 @@
     "output"
   ],
   "dependencies": {
-    "purescript-eff": "^3.1.0",
-    "purescript-aff": "^3.1.0",
-    "purescript-argonaut-codecs": "^3.1.0",
-    "purescript-argonaut-core": "^3.1.0",
-    "purescript-either": "^3.0.0",
-    "purescript-maps": "^3.3.1",
-    "purescript-monoid": "^3.0.0",
-    "purescript-tuples": "^4.1.0",
-    "purescript-affjax": "^4.0.0",
-    "purescript-signal": "9.0.0",
-    "purescript-nonempty": "^4.0.0",
-    "purescript-arrays": "^4.1.0",
-    "purescript-lists": "^4.7.0",
-    "purescript-strings": "^3.2.1"
-  },
-  "resolutions": {
-    "purescript-aff": "^0.14.0"
+    "purescript-aff": "^5.0.0",
+    "purescript-arrays": "^5.0.0",
+    "purescript-effect": "^2.0.0",
+    "purescript-either": "^4.0.0",
+    "purescript-foreign-object": "^1.0.0",
+    "purescript-lists": "^5.0.0",
+    "purescript-nonempty": "^5.0.0",
+    "purescript-prelude": "^4.0.0",
+    "purescript-signal": "^10.0.0",
+    "purescript-strings": "^4.0.0",
+    "purescript-tuples": "^5.0.0"
   },
   "devDependencies": {
-    "purescript-test-unit": "^11.0.0",
-    "purescript-st": "^3.0.0"
+    "purescript-refs": "^4.1.0",
+    "purescript-test-unit": "^14.0.0",
+    "purescript-psci-support": "^4.0.0"
   }
 }

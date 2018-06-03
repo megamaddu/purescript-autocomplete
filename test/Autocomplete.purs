@@ -2,53 +2,35 @@ module Test.Autocomplete where
 
 import Prelude
 
-import Autocomplete (mkSuggester')
-import Autocomplete.Api (SuggestionApi)
-import Autocomplete.Types (Terms, Suggestions(Ready, Loading, Failed))
-import Control.Monad.Aff (Aff, forkAff, delay)
-import Control.Monad.Eff (foreachE)
-import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Exception (EXCEPTION)
-import Control.Monad.Eff.Ref (REF, readRef, writeRef, newRef)
-import Data.Argonaut.Core (Json)
-import Data.Argonaut.Decode (class DecodeJson, decodeJson)
-import Data.Argonaut.Decode.Combinators ((.?))
+import Autocomplete (FetchFn, mkSuggester')
+import Autocomplete.Types (Suggestions(Ready, Loading, Failed))
 import Data.Array (snoc)
-import Data.Array.Partial (head, tail)
-import Data.Either (Either)
+import Data.Either (Either(..))
 import Data.Int (toNumber)
 import Data.Time.Duration (Milliseconds(..))
-import Network.HTTP.Affjax (AJAX)
-import Signal.Channel (CHANNEL)
-import Signal.Channel as C
+import Effect.Aff (delay)
+import Effect.Class (liftEffect)
+import Effect.Ref as Ref
 import Test.Unit (TestSuite, suite, test)
 import Test.Unit.Assert (equal)
-import Unsafe.Coerce (unsafeCoerce)
 
-runTests :: forall e.
-  TestSuite
-    ( channel :: CHANNEL
-    , ajax :: AJAX
-    , err :: EXCEPTION
-    , ref :: REF
-    | e
-    )
+runTests :: TestSuite
 runTests =
   suite "Autocomplete" do
 
     test "mkSuggester Send/Subscribe Integration Test" do
-      resultsRef <- liftEff $ newRef []
-      suggester <- liftEff $ mkSuggester'
-        { api: fakeSuggestionApi $ Milliseconds 50.0
+      suggester <- liftEffect $ mkSuggester'
+        { fetch: fakeFetch (Milliseconds 50.0)
         , inputDebounce: Milliseconds 0.0
-        , inputTransformer: id
+        , inputTransformer: identity
         }
-      liftEff $ suggester.subscribe \suggestions -> do
-        results <- readRef resultsRef
-        writeRef resultsRef $ snoc results suggestions
+      resultsRef <- liftEffect $ Ref.new []
+      liftEffect $ suggester.subscribe \suggestions -> do
+        Ref.modify_ (_ `snoc` suggestions) resultsRef
 
       let
-        send = liftEff <<< suggester.send
+        send = liftEffect <<< suggester.send
+        wait = delay <<< Milliseconds <<< toNumber
 
       wait 30
       send "c"
@@ -90,19 +72,19 @@ runTests =
       send "chevron"
       wait 200
 
-      results <- liftEff $ readRef resultsRef
+      results <- liftEffect $ Ref.read resultsRef
 
       let
         chevronExpectedMatches =
-          [ Suggestion { phrase: "chevron infinity", hits: 1.1 }
-          , Suggestion { phrase: "chevron print", hits: 1.0 }
-          , Suggestion { phrase: "chevron infinity scarves", hits: 0.9 }
+          [ { phrase: "chevron infinity", hits: 1.1 }
+          , { phrase: "chevron print", hits: 1.0 }
+          , { phrase: "chevron infinity scarves", hits: 0.9 }
           ]
 
         tunicExpectedMatches =
-          [ Suggestion { phrase: "tunics", hits: 0.3 }
-          , Suggestion { phrase: "ruffled tunics", hits: 0.2 }
-          , Suggestion { phrase: "striped tunics", hits: 0.1 }
+          [ { phrase: "tunics", hits: 0.3 }
+          , { phrase: "ruffled tunics", hits: 0.2 }
+          , { phrase: "striped tunics", hits: 0.1 }
           ]
 
       equal
@@ -116,7 +98,7 @@ runTests =
         , Ready [] -- "" done
         , Loading [] -- "foo" loading, "fooo" Loading
         , Ready [] -- "fooo" done
-        , Failed "Couldn't decode Array: Expected field \"phrase\"" [] -- "foo" done
+        , Failed "It broke" [] -- "foo" done
         , Ready chevronExpectedMatches -- "chevron" done
         , Ready [] -- "" done
         , Loading [] -- "tunic" loading
@@ -126,65 +108,28 @@ runTests =
         ]
         results
 
-newtype Suggestion = Suggestion { phrase :: String, hits :: Number }
+type Suggestion = { phrase :: String, hits :: Number }
 
-derive instance eqSuggestion :: Eq Suggestion
-
-instance decodeJsonSuggestion :: DecodeJson Suggestion where
-  decodeJson json = do
-    obj <- decodeJson json
-    phrase <- obj .? "phrase"
-    hits <- obj .? "weight"
-    pure $ Suggestion { phrase, hits }
-
-instance showSuggestion :: Show Suggestion where
-  show (Suggestion x) = "{phrase: '" <> x.phrase <> "', hits: " <> show x.hits <> "}"
-
-fakeSuggestionApi :: Milliseconds -> SuggestionApi Suggestion
-fakeSuggestionApi latency = { getSuggestions }
-  where
-    getSuggestions :: forall e.
-      Terms -> Aff (ajax :: AJAX | e)
-                   (Either
-                      String
-                      (Suggestions Suggestion))
-    getSuggestions t = do
+fakeFetch :: Milliseconds -> FetchFn Suggestion
+fakeFetch latency terms = do
       delay latency
-      pure $ decodeJson mockResults
+      pure mockResults
       where
-        mockResults :: Json
         mockResults =
-          case t of
+          case terms of
             "chevron" ->
-              unsafeCoerce
-                [ { phrase: "chevron infinity", weight: 1.1 }
-                , { phrase: "chevron print", weight: 1.0 }
-                , { phrase: "chevron infinity scarves", weight: 0.9 }
+              Right
+                [ { phrase: "chevron infinity", hits: 1.1 }
+                , { phrase: "chevron print", hits: 1.0 }
+                , { phrase: "chevron infinity scarves", hits: 0.9 }
                 ]
             "tunic" ->
-              unsafeCoerce
-                [ { phrase: "tunics", weight: 0.3 }
-                , { phrase: "ruffled tunics", weight: 0.2 }
-                , { phrase: "striped tunics", weight: 0.1 }
+              Right
+                [ { phrase: "tunics", hits: 0.3 }
+                , { phrase: "ruffled tunics", hits: 0.2 }
+                , { phrase: "striped tunics", hits: 0.1 }
                 ]
             "foo" ->
-              unsafeCoerce
-                [ { pphrase: "chevron infinity", weight: 1 }
-                , { pphrase: "chevron print", weight: 1 }
-                , { pphrase: "chevron infinity scarves", weight: 0 }
-                ]
+              Left "It broke"
             _ ->
-              unsafeCoerce []
-
-fromArr :: forall e a. Partial => Array a -> Aff ( channel :: C.CHANNEL | e ) (C.Channel a)
-fromArr arr = do
-  chan <- liftEff $ C.channel (head arr)
-  _ <- forkAff do
-    delay $ Milliseconds 0.0
-    liftEff $ foreachE (tail arr) \a -> do
-      C.send chan a
-      pure unit
-  pure chan
-
-wait :: forall e. Int -> Aff e Unit
-wait t = delay $ Milliseconds $ toNumber t
+              Right []
