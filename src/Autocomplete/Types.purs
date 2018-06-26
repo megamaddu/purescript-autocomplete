@@ -2,7 +2,6 @@ module Autocomplete.Types where
 
 import Prelude
 
-import Data.Monoid (class Monoid)
 import Data.Tuple (Tuple)
 
 type Terms = String

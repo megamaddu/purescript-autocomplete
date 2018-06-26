@@ -1,10 +1,9 @@
 {
   "name": "purescript-autocomplete",
-  "version": "2.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git://github.com/jane/purescript-autocomplete.git"
+    "url": "git://github.com/spicydonuts/purescript-autocomplete.git"
   },
   "moduleType": [
     "node"
