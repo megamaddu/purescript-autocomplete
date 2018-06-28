@@ -35,14 +35,14 @@ type SuggesterSettings a =
 -- | suggestions for the latest terms sent, even if a previous search is
 -- | slow to complete.  Subscribers immediately receive the most recent
 -- | result set.
-type SuggesterInstance a = Effect
+type SuggesterInstance a =
   { send :: Terms -> Effect Unit
   , subscribe :: (Suggestions a -> Effect Unit) -> Effect Unit
   }
 
 -- | Create a suggester with the default API backend: Affjax.get & decodeJson,
 -- | no input debounce, and no input transformations.
-mkSuggester :: forall a . Eq a => FetchFn a -> SuggesterInstance a
+mkSuggester :: forall a . Eq a => FetchFn a -> Effect (SuggesterInstance a)
 mkSuggester fetch = mkSuggester'
   { fetch
   , inputDebounce: Milliseconds 0.0
@@ -50,7 +50,7 @@ mkSuggester fetch = mkSuggester'
   }
 
 -- | Create a suggester with an alternate API backend.
-mkSuggester' :: forall a. Eq a => SuggesterSettings a -> SuggesterInstance a
+mkSuggester' :: forall a. Eq a => SuggesterSettings a -> Effect (SuggesterInstance a)
 mkSuggester' settings = do
   termChan <- channel mempty
   searchResChan <- channel mempty
@@ -95,4 +95,4 @@ runSearch fetch chan st@(SuggesterState store) = do
     handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []
     handleParseResults e = send chan $ Tuple terms results
       where results = either (\msg -> Failed msg []) Ready e
- 
+
