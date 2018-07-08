@@ -9,5 +9,5 @@ import Test.Unit.Main (runTest)
 
 main :: Effect Unit
 main = runTest do
-  Store.runTests
+  -- Store.runTests
   Autocomplete.runTests

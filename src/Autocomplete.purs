@@ -10,23 +10,27 @@ import Prelude
 
 import Autocomplete.Store (SuggesterState(SuggesterState), SuggesterAction(SetTerms, AddResults), hasSuggestionResults, getSuggestionResults, updateSuggestions)
 import Autocomplete.Types (SuggestionResults, Suggestions(..), Terms)
-import Data.Either (Either, either)
+import Control.Alt (alt)
+import Data.Either (Either(..), either)
+import Data.Foldable (for_, traverse_)
 import Data.Map (singleton)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple (Tuple(Tuple))
 import Effect (Effect)
-import Effect.Aff (Aff, runAff_)
+import Effect.Aff (Aff, delay, launchAff_, runAff_, try)
+import Effect.Class (liftEffect)
+import Effect.Console (error, errorShow, warn)
 import Effect.Exception (message)
 import Signal ((~>), (<~), runSignal, dropRepeats, unwrap, foldp, merge)
 import Signal.Channel (Channel, send, subscribe, channel)
-import Signal.Time (debounce)
+import Signal.Time (debounce, millisecond)
 
 type FetchFn a = Terms -> Aff (Either String (Array a))
 
 type SuggesterSettings a =
   { fetch :: FetchFn a
-  , inputDebounce :: Milliseconds
-  , inputTransformer :: Terms -> Terms
+  , inputDebounce :: Maybe Milliseconds
   }
 
 -- | A suggester instance has a `send` function for providing new terms
@@ -45,8 +49,7 @@ type SuggesterInstance a =
 mkSuggester :: forall a . Eq a => FetchFn a -> Effect (SuggesterInstance a)
 mkSuggester fetch = mkSuggester'
   { fetch
-  , inputDebounce: Milliseconds 0.0
-  , inputTransformer: identity
+  , inputDebounce: Nothing
   }
 
 -- | Create a suggester with an alternate API backend.
@@ -56,15 +59,16 @@ mkSuggester' settings = do
   searchResChan <- channel mempty
   let
     terms = SetTerms <~ dropRepeats
-      ( debounce (case settings.inputDebounce of Milliseconds s -> s)
-        $ subscribe termChan
+      ( maybe identity (case _ of Milliseconds s -> debounce s) settings.inputDebounce
+          $ subscribe termChan
       )
     searchRes = AddResults <~ subscribe searchResChan
     suggesterActions = merge terms searchRes
-    storeFoldp = foldp updateSuggestions initialStore suggesterActions
-  stores <- unwrap $ storeFoldp
-                  ~> \store -> do runSearch settings.fetch searchResChan store
-                                  pure store
+    stores = foldp updateSuggestions initialStore suggesterActions
+
+  -- | Changes to the store trigger a fetch if the new current term does not have results
+  runSignal $ stores ~> runSearch settings.fetch searchResChan
+
   let output = dropRepeats $ getSuggestionResults <~ stores
   pure { send: send termChan
        , subscribe: \cb -> runSignal (output ~> cb)
@@ -74,7 +78,7 @@ mkSuggester' settings = do
       { currentTerms: mempty
       , currentResults: mempty
       , termsHistory: mempty
-      , store: singleton mempty mempty
+      , store: mempty
       }
 
 -- | Internal function for running the fetch function when needed.
@@ -85,14 +89,16 @@ runSearch
   -> (SuggesterState a)
   -> Effect Unit
 runSearch fetch chan st@(SuggesterState store) = do
-  if terms == mempty || hasSuggestionResults st
+  if hasSuggestionResults st
     then pure unit
-    else void do
-      send chan $ Tuple terms $ Loading []
-      runAff_ (either handleAjaxError handleParseResults) (fetch terms)
+    else runAff_ (either errorShow pure) do
+      isAsync <- alt (const false <$> ((liftEffect <<< handleResults) =<< fetch terms))
+                     (const true <$> (delay $ Milliseconds 0.0))
+      when isAsync do
+        liftEffect $ send chan $ Tuple terms $ Loading []
+
   where
     terms = store.currentTerms
-    handleAjaxError e = send chan $ Tuple terms $ Failed (message e) []
-    handleParseResults e = send chan $ Tuple terms results
+    handleResults e = send chan $ Tuple terms results
       where results = either (\msg -> Failed msg []) Ready e
 

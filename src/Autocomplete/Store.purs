@@ -5,9 +5,10 @@ import Prelude
 import Autocomplete.Types (Suggestions(..), SuggestionResults, Terms)
 import Data.Array (length)
 import Data.List (List(Nil, Cons), (:), take)
-import Data.Map (Map, lookup, insert)
-import Data.Maybe (isJust, fromMaybe)
+import Data.Map (Map, alter, insert, lookup, update)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Tuple (Tuple(Tuple))
+import Debug.Trace (spy)
 
 -- | Stores searched terms so they can be recalled without re-querying.
 -- | Also stores the current search terms.
@@ -30,11 +31,17 @@ updateSuggestions action (SuggesterState state) =
             if terms == ""
               then Nil
               else state.currentTerms : state.termsHistory
-      in buildState terms newHistory state.store
+      in buildState (const terms $ spy ("update: " <> terms) "_") newHistory state.store
     AddResults (Tuple terms results) ->
-      let newStore = insert terms results state.store
+      let newStore = alter (maybeUpdateTermResult (spy ("update: " <> show terms) $ Just results)) terms state.store
       in buildState state.currentTerms state.termsHistory newStore
   where
+    maybeUpdateTermResult = case _, _ of
+      Just a             , Nothing          -> Just a -- always use incoming value when none exists
+      Just a@(Failed _ _), _                -> Just a -- always use "result" values containing data
+      Just a@(Ready _)   , _                -> Just a -- "
+      _                  , b                -> b      -- otherwise, no update
+
     buildState currentTerms termsHistory store = SuggesterState
       { currentTerms
       , termsHistory: take 100 termsHistory
@@ -57,9 +64,7 @@ updateSuggestions action (SuggesterState state) =
     substitute (Ready _) r = Ready r
 
     lookupOrLoading terms store =
-      if terms == ""
-        then Ready []
-        else fromMaybe (Loading []) $ lookup terms store
+      fromMaybe (Loading []) $ lookup terms store
 
     getNextBestResults Nil store = []
     getNextBestResults (Cons terms history) store =

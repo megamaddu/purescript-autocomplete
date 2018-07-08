@@ -17,9 +17,9 @@ runTests :: TestSuite
 runTests =
   suite "Autocomplete.Store" do
 
-    test "updateSuggestions returns empty Ready results for an empty store" do
+    test "updateSuggestions returns empty Loading results for an empty store" do
       equal "" $ currentTerms emptyState
-      equal (Ready []) $ currentResults emptyState
+      equal (Loading []) $ currentResults emptyState
 
     test "updateSuggestions returns empty Loading results for an empty store after terms are set" do
       let
@@ -38,7 +38,8 @@ runTests =
     test "updateSuggestions returns cached results in any order" do
       let
         ops =
-          [ Tuple "f" (Ready ["a"])
+          [ Tuple "" (Ready [])
+          , Tuple "f" (Ready ["a"])
           , Tuple "b" (Ready ["b"])
           , Tuple "fo" (Ready ["aa"])
           , Tuple "ba" (Ready ["bb"])
