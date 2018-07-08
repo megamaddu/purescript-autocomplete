@@ -12,29 +12,22 @@ import Debug.Trace (spy)
 
 -- | Stores searched terms so they can be recalled without re-querying.
 -- | Also stores the current search terms.
-newtype SuggesterState a = SuggesterState { currentTerms :: Terms
-                                          , currentResults :: (Suggestions a)
-                                          , termsHistory :: List Terms
-                                          , store :: Map Terms (Suggestions a) }
+newtype SuggesterState a = SuggesterState (Map Terms (Suggestions a))
 
 data SuggesterAction a
-  = SetTerms Terms
-  | AddResults (SuggestionResults a)
+  = AddResults (SuggestionResults a)
+  | NoAction
 
 -- | Updates the suggestion store, updating either
 -- | the current terms or search results.
 updateSuggestions :: forall a. SuggesterAction a -> SuggesterState a -> SuggesterState a
-updateSuggestions action (SuggesterState state) =
-  case action of
-    SetTerms terms ->
-      let newHistory =
-            if terms == ""
-              then Nil
-              else state.currentTerms : state.termsHistory
-      in buildState (const terms $ spy ("update: " <> terms) "_") newHistory state.store
+updateSuggestions action (SuggesterState store) =
+  case spy "action" action of
     AddResults (Tuple terms results) ->
-      let newStore = alter (maybeUpdateTermResult (spy ("update: " <> show terms) $ Just results)) terms state.store
-      in buildState state.currentTerms state.termsHistory newStore
+      let newStore = alter (maybeUpdateTermResult (spy ("update: " <> show terms) $ Just results)) terms store
+      in SuggesterState newStore
+    NoAction ->
+      SuggesterState store
   where
     maybeUpdateTermResult = case _, _ of
       Just a             , Nothing          -> Just a -- always use incoming value when none exists
@@ -42,42 +35,24 @@ updateSuggestions action (SuggesterState state) =
       Just a@(Ready _)   , _                -> Just a -- "
       _                  , b                -> b      -- otherwise, no update
 
-    buildState currentTerms termsHistory store = SuggesterState
-      { currentTerms
-      , termsHistory: take 100 termsHistory
-      , store
-      , currentResults:
-          let
-            results = lookupOrLoading currentTerms store
-          in
-            case length $ runSuggestions results of
-              0 -> results `substitute` getNextBestResults termsHistory store
-              _ -> results
-      }
-
-    runSuggestions (Loading a) = a
-    runSuggestions (Failed _ a) = a
-    runSuggestions (Ready a) = a
-
-    substitute (Loading _) r = Loading r
-    substitute (Failed e _) r = Failed e r
-    substitute (Ready _) r = Ready r
-
-    lookupOrLoading terms store =
-      fromMaybe (Loading []) $ lookup terms store
-
-    getNextBestResults Nil store = []
-    getNextBestResults (Cons terms history) store =
-      let results = runSuggestions $ lookupOrLoading terms store
-      in case length results of
-        0 -> getNextBestResults history store
-        _ -> results
+getNextBestResults :: forall a. List Terms -> SuggesterState a -> Suggestions a
+getNextBestResults Nil store = Loading []
+getNextBestResults (Cons terms history) store =
+  let results = getSuggestionResults terms store
+  in case resultLength results of
+    0 -> getNextBestResults history store
+    _ -> results
+  where
+    resultLength (Loading xs) = length xs
+    resultLength (Failed _ xs) = length xs
+    resultLength (Ready xs) = length xs
 
 -- | Returns whether the store contains any form of results for the
 -- | current terms.
-hasSuggestionResults :: forall a. SuggesterState a -> Boolean
-hasSuggestionResults (SuggesterState s) = isJust $ lookup s.currentTerms s.store
+hasSuggestionResults :: forall a. Terms -> SuggesterState a -> Boolean
+hasSuggestionResults terms (SuggesterState store) = isJust $ lookup terms store
 
--- | Find the results for the store's current terms, or an empty result set.
-getSuggestionResults :: forall a. SuggesterState a -> Suggestions a
-getSuggestionResults (SuggesterState s) = s.currentResults
+-- | Find the results for the store's current terms, or an empty Loading result set.
+getSuggestionResults :: forall a. Terms -> SuggesterState a -> Suggestions a
+getSuggestionResults terms (SuggesterState store) =
+  fromMaybe (Loading []) $ lookup terms store

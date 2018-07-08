@@ -2,7 +2,7 @@ module Test.Autocomplete.Store where
 
 import Prelude
 
-import Autocomplete.Store (SuggesterState(SuggesterState), SuggesterAction(AddResults, SetTerms), updateSuggestions)
+import Autocomplete.Store (SuggesterAction(AddResults), SuggesterState(SuggesterState), getSuggestionResults, updateSuggestions)
 import Autocomplete.Types (Terms, Suggestions(Ready, Loading))
 import Data.Foldable (foldl)
 import Data.Map (Map, singleton)
@@ -18,22 +18,16 @@ runTests =
   suite "Autocomplete.Store" do
 
     test "updateSuggestions returns empty Loading results for an empty store" do
-      equal "" $ currentTerms emptyState
-      equal (Loading []) $ currentResults emptyState
+      equal (Loading []) $ getSuggestionResults "" emptyState
 
     test "updateSuggestions returns empty Loading results for an empty store after terms are set" do
-      let
-        state = updateSuggestions (SetTerms "foo") emptyState
-      equal "foo" $ currentTerms state
-      equal (Loading []) $ currentResults state
+      equal (Loading []) $ getSuggestionResults "foo" emptyState
 
     test "updateSuggestions returns empty Ready results for a store after terms are set and results loaded" do
       let
         fooResults = Ready ["a", "b", "c"]
-        state1 = updateSuggestions (SetTerms "foo") emptyState
-        state2 = updateSuggestions (AddResults (Tuple "foo" fooResults)) state1
-      equal "foo" $ currentTerms state2
-      equal fooResults $ currentResults state2
+        state = updateSuggestions (AddResults (Tuple "foo" fooResults)) emptyState
+      equal fooResults $ getSuggestionResults "foo" state
 
     test "updateSuggestions returns cached results in any order" do
       let
@@ -50,72 +44,29 @@ runTests =
 
       state <- liftEffect $ Ref.new initialState
 
-      setTerms state "foo"
-      assertResults state $ Ready ["aaa"]
-
-      setTerms state "ba"
-      assertResults state $ Ready ["bb"]
-
-      setTerms state "b"
-      assertResults state $ Ready ["b"]
-
-      setTerms state ""
-      assertResults state $ Ready []
-
-      setTerms state "f"
-      assertResults state $ Ready ["a"]
-
-      setTerms state "fo"
-      assertResults state $ Ready ["aa"]
-
-      setTerms state "foo"
-      assertResults state $ Ready ["aaa"]
-
-      setTerms state ""
-      assertResults state $ Ready []
-
-      setTerms state "b"
-      assertResults state $ Ready ["b"]
-
-      setTerms state "ba"
-      assertResults state $ Ready ["bb"]
-
-      setTerms state "bar"
-      assertResults state $ Ready ["bbb"]
-
-setTerms
-  :: forall a
-   . Ref.Ref (SuggesterState a)
-  -> Terms
-  -> Aff Unit
-setTerms ref terms = liftEffect do
-  Ref.modify_ (updateSuggestions (SetTerms terms)) ref
+      assertResults "foo" state $ Ready ["aaa"]
+      assertResults "ba" state $ Ready ["bb"]
+      assertResults "b" state $ Ready ["b"]
+      assertResults "" state $ Ready []
+      assertResults "f" state $ Ready ["a"]
+      assertResults "fo" state $ Ready ["aa"]
+      assertResults "foo" state $ Ready ["aaa"]
+      assertResults "" state $ Ready []
+      assertResults "b" state $ Ready ["b"]
+      assertResults "ba" state $ Ready ["bb"]
+      assertResults "bar" state $ Ready ["bbb"]
 
 assertResults
   :: forall a
    . Eq a
   => Show a
-  => Ref.Ref (SuggesterState a)
+  => Terms
+  -> Ref.Ref (SuggesterState a)
   -> Suggestions a
   -> Aff Unit
-assertResults ref expected = do
+assertResults terms ref expected = do
   state <- liftEffect $ Ref.read ref
-  equal expected $ currentResults state
-
-currentTerms :: forall a. SuggesterState a -> Terms
-currentTerms (SuggesterState s) = s.currentTerms
-
-currentResults :: forall a. SuggesterState a -> Suggestions a
-currentResults (SuggesterState s) = s.currentResults
-
-currentStore :: forall a. SuggesterState a -> Map Terms (Suggestions a)
-currentStore (SuggesterState s) = s.store
+  equal expected $ getSuggestionResults terms state
 
 emptyState :: SuggesterState String
-emptyState =
-  SuggesterState
-    { currentTerms: mempty
-    , currentResults: mempty
-    , termsHistory: mempty
-    , store: singleton mempty mempty
-    }
+emptyState = SuggesterState mempty
