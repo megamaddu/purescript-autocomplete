@@ -10,7 +10,6 @@ import Data.Int (toNumber)
 import Data.Maybe (Maybe(..))
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse, traverse_)
-import Debug.Trace (spy)
 import Effect.Aff (delay)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
@@ -28,10 +27,10 @@ runTests =
     --     }
     --   resultsRef <- liftEffect $ Ref.new []
     --   liftEffect $ suggester.subscribe \suggestions -> do
-    --     Ref.modify_ (_ `snoc` spy "suggestions" suggestions) resultsRef
+    --     Ref.modify_ (_ `snoc` suggestions) resultsRef
 
     --   let
-    --     send = liftEffect <<< suggester.send <<< spy "send"
+    --     send = liftEffect <<< suggester.send
     --     wait = delay <<< Milliseconds <<< toNumber
 
     --   send ""
@@ -122,8 +121,7 @@ runTests =
         }
       resultsRef <- liftEffect $ Ref.new []
       liftEffect $ suggester.subscribe \suggestions -> do
-        Ref.modify_ (_ `snoc` spy "suggestions" suggestions) resultsRef
-
+        Ref.modify_ (_ `snoc` suggestions) resultsRef
       results <- liftEffect $ Ref.read resultsRef
 
       equal
@@ -131,66 +129,66 @@ runTests =
         ]
         results
 
-    -- test "mkSuggester Send/Subscribe Synchronous Integration Test" do
-    --   suggester <- liftEffect $ mkSuggester'
-    --     { fetch: fakeFetch Nothing
-    --     , inputDebounce: Nothing
-    --     }
-    --   resultsRef <- liftEffect $ Ref.new []
-    --   liftEffect $ suggester.subscribe \suggestions -> do
-    --     Ref.modify_ (_ `snoc` spy "suggestions" suggestions) resultsRef
+    test "mkSuggester Send/Subscribe Synchronous Integration Test" do
+      suggester <- liftEffect $ mkSuggester'
+        { fetch: fakeFetch Nothing
+        , inputDebounce: Nothing
+        }
+      resultsRef <- liftEffect $ Ref.new []
+      liftEffect $ suggester.subscribe \suggestions -> do
+        Ref.modify_ (_ `snoc` suggestions) resultsRef
 
-    --   let
-    --     wait = delay <<< Milliseconds <<< toNumber
-    --     send term = wait 10 <* (liftEffect $ suggester.send $ spy "send" term)
+      let
+        wait = delay <<< Milliseconds <<< toNumber
+        send term = wait 10 <* (liftEffect $ suggester.send $ term)
 
-    --   -- "wait" is still necessary here to allow
-    --   -- values to be processed, just as they normally
-    --   -- would be between a user's key strokes. The
-    --   -- difference here from the async version is
-    --   -- that we should not see "Loading _" in the
-    --   -- results.
-    --   send "c"
-    --   send "ch"
-    --   send "che"
-    --   send "chev"
-    --   send "chevr"
-    --   send "chevro"
-    --   send "chevron"
-    --   send "chevronx"
-    --   send "chevron"
-    --   send "chevr"
-    --   send ""
-    --   send "foo"
-    --   send "fooo"
-    --   send "foo"
-    --   send "chevron"
-    --   send ""
-    --   send "tunic"
-    --   send ""
-    --   send "chevron"
-    --   send "tunic"
-    --   -- wait 10
+      -- "wait" is still necessary here to allow
+      -- values to be processed, just as they normally
+      -- would be between a user's key strokes. The
+      -- difference here from the async version is
+      -- that we should not see "Loading _" in the
+      -- results.
+      send "c"
+      send "ch"
+      send "che"
+      send "chev"
+      send "chevr"
+      send "chevro"
+      send "chevron"
+      -- send "chevronx"
+      -- send "chevron"
+      -- send "chevr"
+      -- send ""
+      -- send "foo"
+      -- send "fooo"
+      -- send "foo"
+      -- send "chevron"
+      -- send ""
+      -- send "tunic"
+      -- send ""
+      -- send "chevron"
+      -- send "tunic"
+      -- wait 10
 
-    --   results <- liftEffect $ Ref.read resultsRef
+      results <- liftEffect $ Ref.read resultsRef
 
-    --   equal
-    --     [ Ready [] -- synchronous initial "" value
-    --     , Ready chevronExpectedMatches -- "chevron"
-    --     , Ready [] -- "chevronx"
-    --     , Ready chevronExpectedMatches -- "chevron" again
-    --     , Ready [] -- "chevr", "" again
-    --     , Failed "It broke" [] -- "foo"
-    --     , Ready [] -- "fooo"
-    --     , Failed "It broke" [] -- "foo" again
-    --     , Ready chevronExpectedMatches -- "chevron" again
-    --     , Ready [] -- "" again
-    --     , Ready tunicExpectedMatches -- "tunic"
-    --     , Ready [] -- ""
-    --     , Ready chevronExpectedMatches -- "chevron"
-    --     , Ready tunicExpectedMatches -- "tunic"
-    --     ]
-    --     results
+      equal
+        [ Ready [] -- synchronous initial "" value
+        , Ready chevronExpectedMatches -- "chevron"
+        -- , Ready [] -- "chevronx"
+        -- , Ready chevronExpectedMatches -- "chevron" again
+        -- , Ready [] -- "chevr", "" again
+        -- , Failed "It broke" [] -- "foo"
+        -- , Ready [] -- "fooo"
+        -- , Failed "It broke" [] -- "foo" again
+        -- , Ready chevronExpectedMatches -- "chevron" again
+        -- , Ready [] -- "" again
+        -- , Ready tunicExpectedMatches -- "tunic"
+        -- , Ready [] -- ""
+        -- , Ready chevronExpectedMatches -- "chevron"
+        -- , Ready tunicExpectedMatches -- "tunic"
+        ]
+        results
 
   where
     chevronExpectedMatches =
@@ -208,13 +206,13 @@ runTests =
 type Suggestion = { phrase :: String }
 
 fakeFetch :: Maybe Milliseconds -> FetchFn Suggestion
-fakeFetch _ "" = pure $ spy "fetch \"\"" $ Right []
+fakeFetch _ "" = pure $ Right []
 fakeFetch latency terms = do
       traverse_ delay latency
       pure mockResults
       where
         mockResults =
-          case spy ("fetch " <> terms) terms of
+          case terms of
             "chevron" ->
               Right
                 [ { phrase: "chevron infinity" }

@@ -5,7 +5,6 @@ import Prelude
 import Autocomplete.Store (SuggesterAction(AddResults), SuggesterState(SuggesterState), getSuggestionResults, updateSuggestions)
 import Autocomplete.Types (Terms, Suggestions(Ready, Loading))
 import Data.Foldable (foldl)
-import Data.Map (Map, singleton)
 import Data.Tuple (Tuple(Tuple))
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -18,16 +17,16 @@ runTests =
   suite "Autocomplete.Store" do
 
     test "updateSuggestions returns empty Loading results for an empty store" do
-      equal (Loading []) $ getSuggestionResults "" emptyState
+      equal (Loading []) $ getSuggestionResults (pure "") emptyState
 
     test "updateSuggestions returns empty Loading results for an empty store after terms are set" do
-      equal (Loading []) $ getSuggestionResults "foo" emptyState
+      equal (Loading []) $ getSuggestionResults (pure "foo") emptyState
 
     test "updateSuggestions returns empty Ready results for a store after terms are set and results loaded" do
       let
         fooResults = Ready ["a", "b", "c"]
         state = updateSuggestions (AddResults (Tuple "foo" fooResults)) emptyState
-      equal fooResults $ getSuggestionResults "foo" state
+      equal fooResults $ getSuggestionResults (pure "foo") state
 
     test "updateSuggestions returns cached results in any order" do
       let
@@ -66,7 +65,7 @@ assertResults
   -> Aff Unit
 assertResults terms ref expected = do
   state <- liftEffect $ Ref.read ref
-  equal expected $ getSuggestionResults terms state
+  equal expected $ getSuggestionResults (pure terms) state
 
 emptyState :: SuggesterState String
 emptyState = SuggesterState mempty

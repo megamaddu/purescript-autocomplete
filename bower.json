@@ -25,7 +25,8 @@
     "purescript-prelude": "^4.0.0",
     "purescript-signal": "^10.0.0",
     "purescript-strings": "^4.0.0",
-    "purescript-tuples": "^5.0.0"
+    "purescript-tuples": "^5.0.0",
+    "purescript-behaviors": "^7.0.0"
   },
   "devDependencies": {
     "purescript-refs": "^4.1.0",
