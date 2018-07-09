@@ -125,7 +125,8 @@ runTests =
       results <- liftEffect $ Ref.read resultsRef
 
       equal
-        [ Ready [] -- synchronous initial "" value
+        [
+        -- [ Ready [] -- synchronous initial "" value
         ]
         results
 

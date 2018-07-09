@@ -7,6 +7,7 @@ import Data.Array (length)
 import Data.List (List(Nil, Cons), (:), take)
 import Data.Map (Map, alter, insert, lookup, update)
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
+import Data.Newtype (class Newtype)
 import Data.Tuple (Tuple(Tuple))
 import Debug.Trace (spy)
 
@@ -14,8 +15,11 @@ import Debug.Trace (spy)
 -- | Also stores the current search terms.
 newtype SuggesterState a = SuggesterState (Map Terms (Suggestions a))
 
+derive instance newtypeSuggesterState :: Newtype (SuggesterState a) _
+
 data SuggesterAction a
   = AddResults (SuggestionResults a)
+  | PushTerm Terms
   | NoAction
 
 -- | Updates the suggestion store, updating either
@@ -27,6 +31,8 @@ updateSuggestions action (SuggesterState store) =
       -- let newStore = alter (maybeUpdateTermResult $ Just results) terms store
       let newStore = insert terms results store
       in SuggesterState newStore
+    PushTerm _tms ->
+      SuggesterState store
     NoAction ->
       SuggesterState store
   where
